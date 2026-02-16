@@ -1,4 +1,4 @@
-package frc.robot.subsystems.swerve;
+package frc.lib.swerve;
 
 public class Gearing {
     private double gearing = 1.0;
