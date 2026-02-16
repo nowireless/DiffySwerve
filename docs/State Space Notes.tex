@@ -1,0 +1,62 @@
+\documentclass[11pt, oneside]{article}   	% use "amsart" instead of "article" for AMSLaTeX format
+\usepackage{geometry}                		% See geometry.pdf to learn the layout options. There are lots.
+\geometry{letterpaper}                   		% ... or a4paper or a5paper or ... 
+%\geometry{landscape}                		% Activate for rotated page geometry
+%\usepackage[parfill]{parskip}    		% Activate to begin paragraphs with an empty line\usepackage{graphicx}				% Use pdf, png, jpg, or eps§ with pdflatex; use eps in DVI mode
+								% TeX will automatically convert eps --> pdf in pdflatex
+								
+%\usepackage{{Gratzer-Color-Scheme}	% Active to color theorems red and lemmas blue
+	
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{amsthm}
+
+
+%SetFonts
+
+%SetFonts
+
+
+\title{State Space Control Notes}
+\author{Ryan Sjostrand}
+%\date{}							% Activate to display a given date or no date
+
+\begin{document}
+\maketitle
+
+
+\section{Background}
+
+\subsection{Notation}
+
+
+\begin{definition}[Continuous state-space notation]%
+  \index{state-space controllers!continuous open-loop}
+  \begin{align}
+    \dot{\mat{x}} &= \mat{A}\mat{x} + \mat{B}\mat{u} \label{eq:cont_ss_x} \\
+    \mat{y} &= \mat{C}\mat{x} + \mat{D}\mat{u} \label{eq:cont_ss_y}
+  \end{align}
+  \begin{figurekey}
+    \begin{tabular}{llll}
+      $\mat{A}$ & system matrix      & $\mat{x}$ & state vector \\
+      $\mat{B}$ & input matrix       & $\mat{u}$ & input vector \\
+      $\mat{C}$ & output matrix      & $\mat{y}$ & output vector \\
+      $\mat{D}$ & feedthrough matrix &  &  \\
+    \end{tabular}
+  \end{figurekey}
+\end{definition}
+
+\subsection{Control Law}
+
+
+\section{Fly Wheel Controler}
+%\subsection{}
+
+\section{Arm Pivot Controller}
+
+\section{Elevator Controller}
+
+\section{Differential Swerve Controller}
+
+
+\end{document}  
