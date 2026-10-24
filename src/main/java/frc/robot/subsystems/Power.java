@@ -7,16 +7,15 @@ import edu.wpi.first.wpilibj.AnalogInput;
 import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
-import frc.robot.RobotContainer;
 
-public class Battery extends SubsystemBase {
+public class Power extends SubsystemBase {
     
     private final TalonSRX m_talon = new TalonSRX(1);
     private double m_batteryVoltage;
 
     private final AnalogInput m_voltageSensor = new AnalogInput(3);
     
-    public Battery() {
+    public Power() {
         m_talon.setStatusFramePeriod(StatusFrameEnhanced.Status_4_AinTempVbat, 10);
 
         // m_voltageSensor.setAverageBits(10);

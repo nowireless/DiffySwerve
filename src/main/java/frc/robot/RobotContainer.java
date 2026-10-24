@@ -6,11 +6,8 @@ package frc.robot;
 
 import frc.robot.Constants.OperatorConstants;
 import frc.robot.commands.Autos;
-import frc.robot.commands.ExampleCommand;
-import frc.robot.subsystems.Battery;
 import frc.robot.subsystems.Drive;
 import frc.robot.subsystems.Hack;
-import edu.wpi.first.wpilibj.motorcontrol.Spark;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
@@ -23,8 +20,8 @@ import edu.wpi.first.wpilibj2.command.button.Trigger;
  */
 public class RobotContainer {
   // The robot's subsystems and commands are defined here...
-  private final Battery m_battery = new Battery();
-  private final Drive m_exampleSubsystem = new Drive();
+  // private final Battery m_battery = new Battery();
+  // private final Drive m_drive = new Drive();
   private final Hack m_hack = new Hack();
 
   // Replace with CommandPS4Controller or CommandJoystick if needed
@@ -63,6 +60,6 @@ public class RobotContainer {
    */
   public Command getAutonomousCommand() {
     // An example command will be run in autonomous
-    return Autos.exampleAuto(m_exampleSubsystem);
+    return null;
   }
 }
