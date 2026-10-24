@@ -25,4 +25,10 @@ public interface SwerveModule {
      * @param desiredState Desired state with speed and angle.
      */
     public void setDesiredState(SwerveModuleState desiredState);
+
+    /**
+     * This method is called periodically, and is used 
+     * to update swerve module-specific state.
+     */
+    default void periodic() {};
 }
