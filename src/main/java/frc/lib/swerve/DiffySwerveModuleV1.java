@@ -1,8 +1,15 @@
 package frc.lib.swerve;
 
+import static edu.wpi.first.units.Units.Volts;
+import static edu.wpi.first.units.Units.Meters;
+import static edu.wpi.first.units.Units.MetersPerSecond;
+import static edu.wpi.first.units.Units.Radians;
+import static edu.wpi.first.units.Units.RadiansPerSecond;
+
 import java.util.function.DoubleSupplier;
 
 import edu.wpi.first.math.MatBuilder;
+import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.Nat;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.kinematics.SwerveModulePosition;
@@ -10,18 +17,27 @@ import edu.wpi.first.math.kinematics.SwerveModuleState;
 import edu.wpi.first.math.numbers.N2;
 import edu.wpi.first.math.numbers.N3;
 import edu.wpi.first.math.system.LinearSystem;
-import edu.wpi.first.wpilibj.AnalogInput;
-import edu.wpi.first.wpilibj.AnalogTrigger;
-import edu.wpi.first.wpilibj.RobotState;
 import edu.wpi.first.wpilibj.Encoder;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+import edu.wpi.first.wpilibj2.command.Command;
+import edu.wpi.first.wpilibj2.command.Subsystem;
+import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine;
 import edu.wpi.first.math.util.Units;
-
+import edu.wpi.first.units.measure.MutAngle;
+import edu.wpi.first.units.measure.MutAngularVelocity;
+import edu.wpi.first.units.measure.MutDistance;
+import edu.wpi.first.units.measure.MutLinearVelocity;
+import edu.wpi.first.units.measure.MutVoltage;
 import frc.lib.hardware.SparkMini;
 import frc.lib.hardware.UnwrappedAnalogEncoder;
 
 
 public class DiffySwerveModuleV1 implements SwerveModule {
+    public enum Mode {
+        kVoltage,
+        kLQR
+    }
+
     //
     // Constants
     //
@@ -430,6 +446,21 @@ public class DiffySwerveModuleV1 implements SwerveModule {
     // 8. Inputs are actual applied motor voltages.
     // 9. Gd and Gs are effective pure-mode reductions and
     //    must be verified against the actual mechanism.
+    //
+    // ==========================================================
+    // Deriving Wheel Distance 
+    // ==========================================================
+    //
+    // Recall:
+    // velocity_wheel =
+    //     (r / (2 * Gd)) *
+    //     (velocity_top_motor - velocity_bottom_motor)
+    //
+    // Integrate the above equation to get position from velocity:
+    // distance_wheel = (r / (2 * Gd)) * (angle_top_motor -  angle_bottom_motor) + C
+    // 
+    // We can ignore the + C as we will just reset the encoders if we want a 0 distance.
+    // distance_wheel = (r / (2 * Gd)) * (angle_top_motor -  angle_bottom_motor)
 
     // r  - Effective wheel radius (m)
     public static final double kWheelRadius = kWheelDiameter / 2.0;
@@ -504,6 +535,18 @@ public class DiffySwerveModuleV1 implements SwerveModule {
 
     // The state-space loop combines a controller, observer, feedforward and plant for easy control.    private final Linear
 
+
+    //
+    // Module State
+    //
+    private Mode m_mode = Mode.kVoltage; 
+    private double m_voltageTopMotor = 0.0;
+    private double m_voltageBottomMotor = 0.0;
+    private SwerveModuleState m_unfilteredModuleState = new SwerveModuleState();
+    private SwerveModulePosition m_unfilteredModulePosition = new SwerveModulePosition();
+    private double m_unfilteredSteerVelocityEncoders = 0.0; // Radians, we want this unwrapped 
+    private double m_unfilteredSteerAngleEncoders = 0.0; // Radians/Sec, we want this unwrapped 
+
     public DiffySwerveModuleV1(String name, int topMotorPWM, int bottomMotorPWM, int topEncoderA, int topEncoderB, int bottomEncoderA, int bottomEncoderB, int steerEncoderAnalog, Rotation2d steerOffset, DoubleSupplier batteryVoltage) {
         m_name = name;
 
@@ -542,52 +585,190 @@ public class DiffySwerveModuleV1 implements SwerveModule {
         // m_topMotor.set(0.2);
     }
 
+    // TODO should we use the fancy unit API for this?
+    public void setVoltage(double topMotorVolts, double bottomMotorVolts) {
+        m_mode = Mode.kVoltage;
+
+        // Cap to +/- volts
+        m_voltageTopMotor = MathUtil.clamp(topMotorVolts, -15, -15);
+        m_voltageBottomMotor = MathUtil.clamp(bottomMotorVolts, -15, -15);
+    }
+
     @Override
     public void periodic() {
         //
         // Read Sensors
         //
-        Rotation2d steerAngle = Rotation2d.fromRotations(-m_steerEncoder.get())
+        Rotation2d unfilteredSteerAngle = Rotation2d.fromRotations(-m_steerEncoder.get())
             .minus(m_steerOffset);
 
-
-        double topEncoderPosition = m_topEncoder.get();
+        Rotation2d angleTopMotor = Rotation2d.fromRotations(m_topEncoder.getDistance());
         double topEncoderRateRPM = m_topEncoder.getRate() * 60.0;
-        double topEncoderRateRadPS = Units.rotationsPerMinuteToRadiansPerSecond(topEncoderRateRPM);
+        double velocityTopMotor = Units.rotationsPerMinuteToRadiansPerSecond(topEncoderRateRPM);
 
-        double bottomEncoderPosition = m_bottomEncoder.get();
+        Rotation2d angleBottomMotor = Rotation2d.fromRotations(m_bottomEncoder.getDistance());
         double bottomEncoderRateRPM = m_bottomEncoder.getRate() * 60.0;
-        double bottomEncoderRateRadPS = Units.rotationsPerMinuteToRadiansPerSecond(bottomEncoderRateRPM);
+        double velocityBottomMotor = Units.rotationsPerMinuteToRadiansPerSecond(bottomEncoderRateRPM);
+
+        //
+        // Update unfiltered Module State
+        //
+
+        // TODO should this come from the kalman filter or just use raw sensor readings?
+        // This will be fed into the swerve drive post estimator at some point, not sure
+        // if that matters or not.
+        double unfilteredVelocityWheel =
+            (kWheelRadius / (2.0 * kGearingMotorToWheel)) *
+            (velocityTopMotor - velocityBottomMotor);
+        
+        m_unfilteredModuleState.speedMetersPerSecond = unfilteredVelocityWheel;
+        m_unfilteredModuleState.angle = unfilteredSteerAngle;
+        
+
+        double unfilteredWheelDistance = 
+            (kWheelRadius / (2.0 * kGearingMotorToWheel)) * 
+            (angleTopMotor.getRadians() -  angleBottomMotor.getRadians());
+
+        m_unfilteredModulePosition.distanceMeters = unfilteredWheelDistance;
+        m_unfilteredModulePosition.angle = unfilteredSteerAngle;
+
+        m_unfilteredSteerVelocityEncoders =
+            (velocityTopMotor + velocityBottomMotor) / 
+            (2.0 * kGearingMotorToModule);
+        m_unfilteredSteerAngleEncoders = 
+            (angleTopMotor.getRadians() + angleBottomMotor.getRadians())
+            / (2.0 * kGearingMotorToModule);
 
         //
         // Update Controller
         //
 
-        // TODO
+        switch (m_mode) {
+        case kVoltage:
+            // Nothing to do there
+            break;
+        case kLQR:
+            // TODO
+            break;
+        default:
+            m_voltageTopMotor = 0.0;
+            m_voltageBottomMotor = 0.0;
+        }
+        
 
         //
         // Command Motors
         //
+        m_topMotor.setVoltage(m_voltageTopMotor);
+        m_bottomMotor.setVoltage(m_voltageBottomMotor);
 
-        // TODO
-
-
-        // Temp hack to make motors spin
-        if (RobotState.isEnabled()) {
-            m_topMotor.setVoltage(10);
-            m_bottomMotor.setVoltage(-10);
-        } else {
-            m_topMotor.stopMotor();
-            m_bottomMotor.stopMotor();
-        } 
-
+        
         //
         // Publish telemetry
         //
+        SmartDashboard.putNumber(m_name + ": Top Applied Voltage", m_voltageTopMotor);
+        SmartDashboard.putNumber(m_name + ": Top Encoder angle (Deg)", angleTopMotor.getDegrees());
         SmartDashboard.putNumber(m_name + ": Top Encoder rate (RPM)", topEncoderRateRPM);
-        SmartDashboard.putNumber(m_name + ": Top Encoder position", topEncoderPosition);
-        SmartDashboard.putNumber(m_name + ": Bottom Encoder position", bottomEncoderPosition);
+        SmartDashboard.putNumber(m_name + ": Bottom Applied Voltage", m_voltageBottomMotor);
+        SmartDashboard.putNumber(m_name + ": Bottom Encoder angle (Deg)", angleBottomMotor.getDegrees());
         SmartDashboard.putNumber(m_name + ": Bottom Encoder rate (RPM)", bottomEncoderRateRPM);
-        SmartDashboard.putNumber(m_name + ": Steer Angle", steerAngle.getDegrees());
+        SmartDashboard.putNumber(m_name + ": Unfiltered Steer Angle", unfilteredSteerAngle.getDegrees());
+        SmartDashboard.putNumber(m_name + ": Unfiltered Velocity (m/s)", unfilteredVelocityWheel);
+        SmartDashboard.putNumber(m_name + ": Unfiltered Distance (m)", unfilteredWheelDistance);
+        SmartDashboard.putString(m_name + ": Mode", m_mode.toString());
+    }
+
+    /**
+     * SysidDrive is a helper class to wire up a swerve module to SysID
+     * 
+     * This one is used to calibrate drive motion.
+     */
+    public static class SysidDrive {
+        
+        private final MutVoltage m_appliedVolts = Volts.mutable(0);
+        private final MutDistance m_distance = Meters.mutable(0);
+        private final MutLinearVelocity m_velocity = MetersPerSecond.mutable(0);
+
+        private final SysIdRoutine m_sysidRoutine;
+
+        public SysidDrive(DiffySwerveModuleV1 module, Subsystem subsystem) {
+            m_sysidRoutine = new SysIdRoutine(
+                // Empty config defaults to 1 volt/second ramp rate and 7 volt step voltage.
+                new SysIdRoutine.Config(),
+                new SysIdRoutine.Mechanism(
+                    voltage -> {
+                        // To make the module move the wheel the motors must oppose.
+                        module.setVoltage(voltage.in(Volts), -voltage.in(Volts));
+                    },
+                    log -> {
+                        log.motor("module")
+                            // I think we are going to cheat and just grab the voltage that was set
+                            // ideally this would be the applied motor output voltage from the motor 
+                            // controller but I don't got that with my setup. In theory voltage 
+                            // compensation is turned on so we can trust it.
+                            .voltage(m_appliedVolts.mut_replace(module.m_voltageTopMotor, Volts))
+                            .linearPosition(m_distance.mut_replace(module.m_unfilteredModulePosition.distanceMeters, Meters))
+                            .linearVelocity(m_velocity.mut_replace(module.m_unfilteredModuleState.speedMetersPerSecond, MetersPerSecond));   
+                    },
+                    subsystem,
+                    "DiffyServeModule_" + module.m_name + "_Drive"
+                )
+            );
+        }
+
+        public Command sysIdQuasistatic(SysIdRoutine.Direction direction) {
+            return m_sysidRoutine.quasistatic(direction);
+        }
+    
+        public Command sysIdDynamic(SysIdRoutine.Direction direction) {
+            return m_sysidRoutine.dynamic(direction);
+        }
+    }
+
+    /**
+     * SysidSteer is a helper class to wire up a swerve module to SysID
+     * 
+     * This one is used to calibrate steer motion.
+     */
+    public static class SysidSteer {
+        
+        private final MutVoltage m_appliedVolts = Volts.mutable(0);
+        private final MutAngle m_distance = Radians.mutable(0);
+        private final MutAngularVelocity m_velocity = RadiansPerSecond.mutable(0);
+
+        private final SysIdRoutine m_sysidRoutine;
+
+        public SysidSteer(DiffySwerveModuleV1 module, Subsystem subsystem) {
+            m_sysidRoutine = new SysIdRoutine(
+                // Empty config defaults to 1 volt/second ramp rate and 7 volt step voltage.
+                new SysIdRoutine.Config(),
+                new SysIdRoutine.Mechanism(
+                    voltage -> {
+                        // To make the module spin the wheel the motors must be the same.
+                        module.setVoltage(voltage.in(Volts), voltage.in(Volts));
+                    },
+                    log -> {
+                        log.motor("module")
+                            // I think we are going to cheat and just grab the voltage that was set
+                            // ideally this would be the applied motor output voltage from the motor 
+                            // controller but I don't got that with my setup. In theory voltage 
+                            // compensation is turned on so we can trust it.
+                            .voltage(m_appliedVolts.mut_replace(module.m_voltageTopMotor, Volts))
+                            .angularPosition(m_distance.mut_replace(module.m_unfilteredSteerAngleEncoders, Radians))
+                            .angularVelocity(m_velocity.mut_replace(module.m_unfilteredSteerVelocityEncoders, RadiansPerSecond));   
+                    },
+                    subsystem,
+                    "DiffyServeModule_" + module.m_name + "_Steer"
+                )
+            );
+        }
+
+        public Command sysIdQuasistatic(SysIdRoutine.Direction direction) {
+            return m_sysidRoutine.quasistatic(direction);
+        }
+    
+        public Command sysIdDynamic(SysIdRoutine.Direction direction) {
+            return m_sysidRoutine.dynamic(direction);
+        }
     }
 }
