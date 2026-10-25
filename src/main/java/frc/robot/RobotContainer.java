@@ -8,6 +8,8 @@ import frc.robot.Constants.OperatorConstants;
 import frc.robot.commands.Autos;
 import frc.robot.subsystems.Drive;
 import frc.robot.subsystems.Hack;
+import frc.robot.subsystems.Power;
+import frc.robot.subsystems.Turret;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
@@ -21,8 +23,15 @@ import edu.wpi.first.wpilibj2.command.button.Trigger;
 public class RobotContainer {
   // The robot's subsystems and commands are defined here...
   // private final Battery m_battery = new Battery();
-  // private final Drive m_drive = new Drive();
-  private final Hack m_hack = new Hack();
+  private final Turret m_turret = new Turret();
+  private final Power m_power = new Power(
+    // m_turret::getBusVoltage
+
+    // Just hard code 20volts
+    () -> 20
+  );
+  private final Drive m_drive = new Drive(m_power);
+  // private final Hack m_hack = new Hack();
 
   // Replace with CommandPS4Controller or CommandJoystick if needed
   private final CommandXboxController m_driverController =

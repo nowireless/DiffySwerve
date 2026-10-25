@@ -1,24 +1,18 @@
 package frc.robot.subsystems;
 
-import com.ctre.phoenix.motorcontrol.StatusFrameEnhanced;
-import com.ctre.phoenix.motorcontrol.can.TalonSRX;
 
-import edu.wpi.first.wpilibj.AnalogInput;
-import edu.wpi.first.wpilibj.RobotController;
+import java.util.function.DoubleSupplier;
+
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 
 public class Power extends SubsystemBase {
     
-    private final TalonSRX m_talon = new TalonSRX(1);
-    private double m_batteryVoltage;
+    private final DoubleSupplier m_batteryVoltageSupplier;
+    private double m_batteryVoltage = 20.0;
 
-    private final AnalogInput m_voltageSensor = new AnalogInput(3);
-    
-    public Power() {
-        m_talon.setStatusFramePeriod(StatusFrameEnhanced.Status_4_AinTempVbat, 10);
-
-        // m_voltageSensor.setAverageBits(10);
+    public Power(DoubleSupplier busVoltage) {
+        m_batteryVoltageSupplier = busVoltage;
     }
 
     public double getVoltage() {
@@ -27,7 +21,7 @@ public class Power extends SubsystemBase {
 
     @Override
     public void periodic() {
-        m_batteryVoltage = m_voltageSensor.getAverageVoltage()/RobotController.getVoltage5V() * 25.0;
+        m_batteryVoltage = m_batteryVoltageSupplier.getAsDouble();
 
         SmartDashboard.putNumber("Battery Voltage", m_batteryVoltage);
     }

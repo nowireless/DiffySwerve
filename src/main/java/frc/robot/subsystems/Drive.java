@@ -16,23 +16,32 @@ import frc.lib.swerve.SwerveModule;
 
 public class Drive extends SubsystemBase {
 
-  private final SwerveModule m_frontRight = new DiffySwerveModuleV1(
-    "Front Left",
-    1, 
-    0, 
-    0, 1, 
-    2, 3, 
-    0, 
-    Rotation2d.fromDegrees(0), 
-    () -> 20
-  );
+  private final SwerveModule m_frontRight;
 
-  private final List<SwerveModule> m_modules = List.of(
-    m_frontRight
-  );
+  private final List<SwerveModule> m_modules;
 
   /** Creates a new ExampleSubsystem. */
-  public Drive() {}
+  public Drive(Power power) {
+
+    //
+    // Modules
+    //
+
+    m_frontRight = new DiffySwerveModuleV1(
+      "Front Left",
+      1, 
+      0, 
+      0, 1, 
+      2, 3, 
+      0, 
+      Rotation2d.fromDegrees(0), 
+      power::getVoltage
+    );
+
+    m_modules = List.of(
+      m_frontRight
+    );
+  }
 
   @Override
   public void periodic() {
