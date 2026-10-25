@@ -166,16 +166,16 @@ public class DiffySwerveModuleV1 implements SwerveModule {
     private final double kSteerVelocityDecay = 0;
     
     // b - Wheel acceleration per volt applies to one motor (rad/s^2/V)
-    private final double kWheelAcceleration = 0;
+    private final double kWheelAccelerationGain = 0;
     
     // c - Steering acceleration per volt applies to one motor (rad/s^2/V)
-    private final double kSteerAcceleration = 0;
+    private final double kSteerAccelerationGain = 0;
     
     // kd -  Drive Gearing coefficient
     private final double kDriveGearingCoefficient = 0;
     
     // ks - Steer Gearing coefficient
-    private final double kSteeringCoefficient = 0;
+    private final double kSteeringGearingCoefficient = 0;
 
 
     private LinearSystem<N3, N2, N3> m_plant = new LinearSystem<>(
@@ -192,9 +192,9 @@ public class DiffySwerveModuleV1 implements SwerveModule {
         // State x Input
         MatBuilder.fill(
             Nat.N3(), Nat.N2(),
-            0,                            0,
-            kWheelAcceleration, -kWheelAcceleration,
-            kSteerAcceleration,  kSteerAcceleration
+            0,                                    0,
+            kWheelAccelerationGain, -kWheelAccelerationGain,
+            kSteerAccelerationGain,  kSteerAccelerationGain
         ),
 
         // C: Output Matrix
@@ -202,8 +202,8 @@ public class DiffySwerveModuleV1 implements SwerveModule {
         MatBuilder.fill(
             Nat.N3(), Nat.N3(),
              1,                         0,                               0,
-            0,  1.0/(2.0*kDriveGearingCoefficient), 1.0/(2.0*kSteeringCoefficient),
-            0, -1.0/(2.0*kDriveGearingCoefficient), 1.0/(2.0*kSteeringCoefficient)
+            0,  1.0/(2.0*kDriveGearingCoefficient), 1.0/(2.0*kSteeringGearingCoefficient),
+            0, -1.0/(2.0*kDriveGearingCoefficient), 1.0/(2.0*kSteeringGearingCoefficient)
         ),
 
         // D: Feedthrough Matrix
