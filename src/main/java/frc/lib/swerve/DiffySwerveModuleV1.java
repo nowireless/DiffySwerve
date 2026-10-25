@@ -1,5 +1,7 @@
 package frc.lib.swerve;
 
+import static edu.wpi.first.units.Units.Gs;
+
 import java.util.function.DoubleSupplier;
 
 import edu.wpi.first.math.MatBuilder;
@@ -23,14 +25,6 @@ public class DiffySwerveModuleV1 implements SwerveModule {
     //
     // Constants
     //
-    public static final double kWheelDiameter = Units.inchesToMeters(4);;
-    public static final double kDriveGearing = new Gearing()
-        .with(76, 21) // UltraPlanetary 4:1 really 3.61:1
-        .with(27, 23) // UltraPlanetary to intermediate shaft
-        .with(68, 14) // Intermediate shaft to outer module gear
-        .with(14, 42) // Inner module gear to bevel shaft
-        .with(28, 14) // Bevel reduction 2:1 
-        .get();
 
     public static final double kMotorEncoderResolution = 7; // 7 pulses * x4 decode => 28 counts
 
@@ -437,24 +431,39 @@ public class DiffySwerveModuleV1 implements SwerveModule {
     //    must be verified against the actual mechanism.
 
 
+    public static final double kWheelDiameter = Units.inchesToMeters(4);
+
+    // r  - Effective wheel radius (m)
+    public static final double kWheelRadius = kWheelDiameter / 2.0;
+
+    // Gd  Pure-drive motor-to-wheel reduction (dimensionless)
+    private final double kGearingMotorToWheel = new Gearing()
+        .with(76, 21) // UltraPlanetary 4:1 really 3.61:1
+        .with(27, 23) // UltraPlanetary to intermediate shaft
+        .with(68, 14) // Intermediate shaft to outer module gear
+        .with(14, 42) // Inner module gear to bevel shaft
+        .with(28, 14) // Bevel reduction 2:1 
+        .get();
+
+    // Gs - Pure-steering motor-to-module reduction (dimensionless)
+    private final double kGearingMotorToModule = new Gearing()
+        .with(76, 21) // UltraPlanetary 4:1 really 3.61:1
+        .with(27, 23) // UltraPlanetary to intermediate shaft
+        .with(68, 14) // Intermediate shaft to outer module gear
+        .get();
+    
+
     // a - Wheel Velocity Decay rate (1/s)
     private final double kWheelVelocityDecay = 0;
 
     // d - Steering Velocity Decay rate (1/s)
     private final double kSteerVelocityDecay = 0;
     
-    // b - Wheel acceleration per volt applies to one motor (rad/s^2/V)
+    // b - Wheel linear acceleration gain ((m/s^2)/V)
     private final double kWheelAccelerationGain = 0;
     
-    // c - Steering acceleration per volt applies to one motor (rad/s^2/V)
+    // c - Steering angular acceleration gain ((rad/s^2)/V)
     private final double kSteerAccelerationGain = 0;
-    
-    // kd -  Drive Gearing coefficient
-    private final double kDriveGearingCoefficient = 0;
-    
-    // ks - Steer Gearing coefficient
-    private final double kSteeringGearingCoefficient = 0;
-
 
     private LinearSystem<N3, N2, N3> m_plant = new LinearSystem<>(
         // A: System Matrix
@@ -479,9 +488,9 @@ public class DiffySwerveModuleV1 implements SwerveModule {
         // Output x States
         MatBuilder.fill(
             Nat.N3(), Nat.N3(),
-             1,                         0,                               0,
-            0,  1.0/(2.0*kDriveGearingCoefficient), 1.0/(2.0*kSteeringGearingCoefficient),
-            0, -1.0/(2.0*kDriveGearingCoefficient), 1.0/(2.0*kSteeringGearingCoefficient)
+             1,                           0,                     0,
+            0,  kGearingMotorToWheel / kWheelRadius, kGearingMotorToModule,
+            0, -kGearingMotorToWheel / kWheelRadius, kGearingMotorToModule
         ),
 
         // D: Feedthrough Matrix
@@ -505,12 +514,10 @@ public class DiffySwerveModuleV1 implements SwerveModule {
 
         m_topEncoder = new Encoder(topEncoderA, topEncoderB);
         m_topEncoder.setReverseDirection(true);
-        // m_topEncoder.setDistancePerPulse(Math.PI * kWheelDiameter / (kMotorEncoderResolution * kDriveGearing));
         m_topEncoder.setDistancePerPulse(1.0/kMotorEncoderResolution);
 
         m_bottomEncoder = new Encoder(bottomEncoderA, bottomEncoderB);
         m_bottomEncoder.setReverseDirection(true);
-        // m_bottomEncoder.setDistancePerPulse(Math.PI * kWheelDiameter / (kMotorEncoderResolution * kDriveGearing));
         m_bottomEncoder.setDistancePerPulse(1.0/kMotorEncoderResolution);
 
 
