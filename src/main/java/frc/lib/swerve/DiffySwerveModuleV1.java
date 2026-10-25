@@ -1,7 +1,5 @@
 package frc.lib.swerve;
 
-import static edu.wpi.first.units.Units.Gs;
-
 import java.util.function.DoubleSupplier;
 
 import edu.wpi.first.math.MatBuilder;
@@ -12,14 +10,16 @@ import edu.wpi.first.math.kinematics.SwerveModuleState;
 import edu.wpi.first.math.numbers.N2;
 import edu.wpi.first.math.numbers.N3;
 import edu.wpi.first.math.system.LinearSystem;
-import edu.wpi.first.wpilibj.AnalogEncoder;
 import edu.wpi.first.wpilibj.AnalogInput;
 import edu.wpi.first.wpilibj.AnalogTrigger;
 import edu.wpi.first.wpilibj.RobotState;
 import edu.wpi.first.wpilibj.Encoder;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
-import frc.lib.hardware.SparkMini;
 import edu.wpi.first.math.util.Units;
+
+import frc.lib.hardware.SparkMini;
+import frc.lib.hardware.UnwrappedAnalogEncoder;
+
 
 public class DiffySwerveModuleV1 implements SwerveModule {
     //
@@ -27,6 +27,7 @@ public class DiffySwerveModuleV1 implements SwerveModule {
     //
 
     public static final double kMotorEncoderResolution = 7; // 7 pulses * x4 decode => 28 counts
+    public static final double kWheelDiameter = Units.inchesToMeters(4);
 
     //
     // Config
@@ -43,7 +44,7 @@ public class DiffySwerveModuleV1 implements SwerveModule {
     private final Encoder m_bottomEncoder;
     private final Encoder m_topEncoder;
 
-    private final AnalogEncoder m_steerEncoder;
+    private final UnwrappedAnalogEncoder m_steerEncoder;
 
     //
     // State Space
@@ -430,9 +431,6 @@ public class DiffySwerveModuleV1 implements SwerveModule {
     // 9. Gd and Gs are effective pure-mode reductions and
     //    must be verified against the actual mechanism.
 
-
-    public static final double kWheelDiameter = Units.inchesToMeters(4);
-
     // r  - Effective wheel radius (m)
     public static final double kWheelRadius = kWheelDiameter / 2.0;
 
@@ -520,21 +518,11 @@ public class DiffySwerveModuleV1 implements SwerveModule {
         m_bottomEncoder.setReverseDirection(true);
         m_bottomEncoder.setDistancePerPulse(1.0/kMotorEncoderResolution);
 
-
-        var steerEncoderInput = new AnalogInput(steerEncoderAnalog);
-
-        var steerEncoderTrigger = new AnalogTrigger(steerEncoderInput);
-
-        m_steerEncoder = new AnalogEncoder(steerEncoderInput);
-        m_steerEncoder.setInverted(false);
+        m_steerEncoder = new UnwrappedAnalogEncoder(steerEncoderAnalog);
 
         m_steerOffset = steerOffset;
     }
 
-    public Rotation2d getAngle() {
-        // TODO need to handle rollover
-        return Rotation2d.fromRotations(m_steerEncoder.get()).minus(m_steerOffset);
-    }
 
     @Override
     public SwerveModuleState getState() {
@@ -559,14 +547,16 @@ public class DiffySwerveModuleV1 implements SwerveModule {
         //
         // Read Sensors
         //
-        Rotation2d steerAngle = Rotation2d.fromRotations(m_steerEncoder.get());
+        Rotation2d steerAngle = Rotation2d.fromRotations(-m_steerEncoder.get())
+            .minus(m_steerOffset);
+
 
         double topEncoderPosition = m_topEncoder.get();
-        double topEncoderRateRPM = m_topEncoder.getRate() * 60;
+        double topEncoderRateRPM = m_topEncoder.getRate() * 60.0;
         double topEncoderRateRadPS = Units.rotationsPerMinuteToRadiansPerSecond(topEncoderRateRPM);
 
         double bottomEncoderPosition = m_bottomEncoder.get();
-        double bottomEncoderRateRPM = m_bottomEncoder.getRate() * 60;
+        double bottomEncoderRateRPM = m_bottomEncoder.getRate() * 60.0;
         double bottomEncoderRateRadPS = Units.rotationsPerMinuteToRadiansPerSecond(bottomEncoderRateRPM);
 
         //
