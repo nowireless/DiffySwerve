@@ -7,15 +7,12 @@ import edu.wpi.first.math.Nat;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.kinematics.SwerveModulePosition;
 import edu.wpi.first.math.kinematics.SwerveModuleState;
-import edu.wpi.first.math.numbers.N1;
 import edu.wpi.first.math.numbers.N2;
 import edu.wpi.first.math.numbers.N3;
 import edu.wpi.first.math.system.LinearSystem;
-import edu.wpi.first.math.system.plant.LinearSystemId;
 import edu.wpi.first.wpilibj.AnalogEncoder;
 import edu.wpi.first.wpilibj.AnalogInput;
 import edu.wpi.first.wpilibj.AnalogTrigger;
-import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj.RobotState;
 import edu.wpi.first.wpilibj.Encoder;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
@@ -158,6 +155,58 @@ public class DiffySwerveModuleV1 implements SwerveModule {
     // b = 1 / (2ka_drive)
     // d = kv_steer/ka_steer
     // c = 1/(2ka_steer)
+    //
+    //
+    // Deriving kd and ks:
+    // Gd - Motor to wheel reduction during pure driving
+    // Gs - Motor to module reduction during pure steering
+    // 
+    // We have already defined these equations:
+    //  speed_wheel = k_d (speed_top - speed_bottom)
+    //  speed_steer = k_s (speed_top + speed_bottom)
+    //
+    // Lets find kd:
+    //  When both motors turn at equal and opposite speeds, with 
+    //  magnitude speed_motor 
+    //        speed_top = speed_motor
+    //    speed_bottom  = -speed_motor 
+    // 
+    //  Then:
+    //  speed_wheel = 2 k_d * speed_motor
+    //  
+    //  Rearrange and solve for k_d
+    //  k_d = (speed_wheel / (2 * speed_motor)) 
+    //  k_d = (speed_wheel / speed_motor) * 1/2  
+    //  k_d = 1/(speed_motor / speed_wheel) * 1/2 
+    //  k_d = 1/(2 * speed_motor / speed_wheel) 
+    //
+    //  Lets define Gd as the motor to wheel reduction when doing pure driving
+    //  Gd =  speed_motor / speed_wheel 
+    //
+    //  Now we can define k_d in terms of Gd
+    //  k_d = 1/(2Gd)
+    //
+    // Lets find ks:
+    //   When both motors turn at equal speeds, with  magnitude 
+    //   speed_motor 
+    //        speed_top = speed_motor
+    //    speed_bottom  = speed_motor 
+    //
+    //  Then:
+    //  speed_steer = 2 k_s * speed_motor
+    //
+    //  Rearrange and solve for k_s
+    //  k_s = (speed_steer / (2 * speed_motor)) 
+    //  k_s = (speed_steer / speed_motor) * 1/2  
+    //  k_s = 1/(speed_motor / speed_steer) * 1/2 
+    //  k_s = 1/(2 * speed_motor / speed_steer) 
+    //
+    //  Lets define Gs as the motor to module reduction when doing pure steering
+    //  Gs =  speed_motor / speed_steer
+    //
+    //  Now we can define k_d in terms of Gd
+    //  k_s = 1/(2Gs)
+    //
 
     // a - Wheel Velocity Decay rate (1/s)
     private final double kWheelVelocityDecay = 0;
