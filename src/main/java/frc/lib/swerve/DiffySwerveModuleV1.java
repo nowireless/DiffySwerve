@@ -55,158 +55,387 @@ public class DiffySwerveModuleV1 implements SwerveModule {
     // State Space
     //
 
-    // The plant holds a state-space model of our flywheel. This system has the following properties:
+    // Differential Swerve State-Space Plant
     //
-    // States (TODO): 
-    // [
-    //  top motor angular velocity (rad/s), 
-    //  bottom motor angular velocity (rad/s), 
-    //  module angle (rad)
-    // ]
-    // Inputs (what we can "put in"):
-    // [
-    //  top_voltage (Volts), 
-    //  bottom_voltage (Volts)
-    // ],
-    // Outputs (what we can measure):
-    // [
-    //  top motor angular velocity (rad/s), 
-    //  bottom motor angular velocity (rad/s), 
-    //  module angle (rad)
-    // ]
+    // ==========================================================
+    // System Definition
+    // ==========================================================
     //
-    // The Kv and Ka constants are found using the FRC Characterization toolsuite.
-    // private final LinearSystem<N3,N2,N3> m_plant = new LinearSystem<>(
-    //     null, 
-    //     null, 
-    //     null, 
-    //     null
-    // );
-
-    // x: State Matrix:
+    // x: States:
     // [
     //     theta_module (rad)
-    //     speed_wheel (rad/s)
-    //     speed_steer (rad/s)
+    //     velocity_wheel (m/s) - Wheel surface linear velocity
+    //     velocity_steer (rad/s) - Module steering angular velocity
     // ]
-    // Inputs:
+    //
+    // u: Inputs:
     // [
     //     voltage_top (V)
     //     voltage_bottom (V)
     // ]
-    // y: Outputs:
+    //
+    // y: Outputs (raw sensor measurements):
     // [
     //     theta_module (rad)
-    //     speed_top_motor (rad/s)
-    //     speed_bottom_motor (rad/s)
+    //     velocity_top_motor (rad/s)
+    //     velocity_bottom_motor (rad/s)
     // ]
     //
-    //  
-    //  Relationship between motor speeds and wheel & steer speeds
-    //  speed_wheel = k_d (speed_top - speed_bottom)
-    //  speed_steer = k_s (speed_top + speed_bottom)
+    // ==========================================================
+    // Gearing Definitions
+    // ==========================================================
     //
-    //  speed_top =     (speed_wheel / (2 k_d)) + (speed_steer / (2 k_s))
-    //  speed_bottom = -(speed_wheel / (2 k_d)) + (speed_steer / (2 k_s))
+    // Gd - Motor-to-wheel reduction during pure driving
+    // Gs - Motor-to-module reduction during pure steering
+    // r  - Effective wheel radius (m)
     //
-    // Thus our C matrix should be:
-    //      theta_module speed_wheel speed steer
-    //     | 1                    0            0 | theta_module
-    // C = | 0             1/(2k_d)     1/(2k_s) | speed_top_motor
-    //     | 0            -1/(2k_d)     1/(2k_s) | speed_bottom_motor
+    // Gd and Gs are dimensionless ratios of angular velocities.
     //
-    // The output equation is:
+    // The differential operates in two modes:
+    //
+    // Pure driving:
+    //     Motors rotate at equal and opposite angular velocities.
+    //     The wheel rotates while the module angle stays fixed.
+    //
+    // Pure steering:
+    //     Motors rotate at equal angular velocities.
+    //     The module rotates without driving the wheel.
+    //
+    // ==========================================================
+    // Deriving Drive Gearing Coefficient (kd)
+    // ==========================================================
+    //
+    // Start with the differential relationship:
+    //
+    // velocity_wheel_angular =
+    //     kd * (velocity_top_motor - velocity_bottom_motor)
+    //
+    // For pure driving, define a motor speed magnitude:
+    //
+    // velocity_top_motor    =  velocity_motor
+    // velocity_bottom_motor = -velocity_motor
+    //
+    // Substitute:
+    //
+    // velocity_wheel_angular =
+    //     kd * (velocity_motor - (-velocity_motor))
+    //
+    // velocity_wheel_angular = 2 * kd * velocity_motor
+    //
+    // Rearrange:
+    //
+    // kd = velocity_wheel_angular / (2 * velocity_motor)
+    //
+    // Define the conventional pure-drive gear reduction:
+    //
+    // Gd = velocity_motor / velocity_wheel_angular
+    //
+    // Substituting:
+    //
+    // kd = 1 / (2 * Gd)
+    //
+    // Now convert wheel angular velocity to linear velocity:
+    //
+    // velocity_wheel = r * velocity_wheel_angular
+    //
+    // Therefore:
+    //
+    // velocity_wheel =
+    //     (r / (2 * Gd)) *
+    //     (velocity_top_motor - velocity_bottom_motor)
+    //
+    // ==========================================================
+    // Deriving Steering Gearing Coefficient (ks)
+    // ==========================================================
+    //
+    // Start with the differential relationship:
+    //
+    // velocity_steer =
+    //     ks * (velocity_top_motor + velocity_bottom_motor)
+    //
+    // For pure steering:
+    //
+    // velocity_top_motor    = velocity_motor
+    // velocity_bottom_motor = velocity_motor
+    //
+    // Substitute:
+    //
+    // velocity_steer = ks * (2 * velocity_motor)
+    //
+    // velocity_steer = 2 * ks * velocity_motor
+    //
+    // Rearrange:
+    //
+    // ks = velocity_steer / (2 * velocity_motor)
+    //
+    // Define the conventional pure-steering reduction:
+    //
+    // Gs = velocity_motor / velocity_steer
+    //
+    // Substituting:
+    //
+    // ks = 1 / (2 * Gs)
+    //
+    // Therefore:
+    //
+    // velocity_steer =
+    //     (1 / (2 * Gs)) *
+    //     (velocity_top_motor + velocity_bottom_motor)
+    //
+    // ==========================================================
+    // Deriving the Output Matrix (C)
+    // ==========================================================
+    //
+    // We have established:
+    //
+    // velocity_wheel =
+    //     (r / (2 * Gd)) *
+    //     (velocity_top_motor - velocity_bottom_motor)
+    //
+    // velocity_steer =
+    //     (1 / (2 * Gs)) *
+    //     (velocity_top_motor + velocity_bottom_motor)
+    //
+    // Rearrange the drive equation:
+    //
+    // velocity_top_motor - velocity_bottom_motor =
+    //     (2 * Gd / r) * velocity_wheel
+    //
+    // Rearrange the steering equation:
+    //
+    // velocity_top_motor + velocity_bottom_motor =
+    //     2 * Gs * velocity_steer
+    //
+    // Add the equations and divide by two:
+    //
+    // velocity_top_motor =
+    //     (Gd / r) * velocity_wheel
+    //     + Gs * velocity_steer
+    //
+    // Subtract the drive equation from the steering equation,
+    // then divide by two:
+    //
+    // velocity_bottom_motor =
+    //     -(Gd / r) * velocity_wheel
+    //     + Gs * velocity_steer
+    //
+    // Our output vector is:
+    //
+    // y = [
+    //     theta_module
+    //     velocity_top_motor
+    //     velocity_bottom_motor
+    // ]
+    //
+    // Therefore:
+    //
+    //          theta_module  velocity_wheel  velocity_steer
+    //        |      1              0               0     |
+    // C =    |      0            Gd/r              Gs    |
+    //        |      0           -Gd/r              Gs    |
+    //
+    // Output equation:
+    //
+    // y = Cx + Du
+    //
+    // Since there is no direct voltage-to-output feedthrough:
+    //
+    // D = 0
+    //
+    // Therefore:
+    //
     // y = Cx
     //
-    //  Gains/Constants for the system
-    //      a - Wheel Velocity Decay rate (1/s)
-    //      d - Steering Velocity Decay rate (1/s)
-    //      b - Wheel acceleration per volt applies to one motor (rad/s^2/V)
-    //      c - Steering acceleration per volt applies to one motor (rad/s^2/V)
-    //     kd -  Drive Gearing coefficient
-    //     ks - Steer Gearing coefficient
+    // ==========================================================
+    // System Dynamics
+    // ==========================================================
     //
-    //     acceleration_wheel = -a * speed_wheel + b(voltage_top - voltage_bottom)
-    //     acceleration_steer = -d * speed_steer + c(voltage_top + voltage_bottom)
+    // Define modal motor voltages:
     //
-    //     | 0  0  1 |
-    // A = | 0 -a  0 |
-    //     | 0  0 -d |
+    // voltage_drive =
+    //     (voltage_top - voltage_bottom) / 2
     //
+    // voltage_steer =
+    //     (voltage_top + voltage_bottom) / 2
+    //
+    // Characterize the two modes using feedforward:
+    //
+    // voltage = kV * velocity + kA * acceleration
+    //
+    // For driving, velocity is measured in m/s.
+    // For steering, velocity is measured in rad/s.
+    //
+    // Static friction (kS) is ignored in this linear model.
+    //
+    // ----------------------------------------------------------
+    // Drive Dynamics
+    // ----------------------------------------------------------
+    //
+    // Feedforward equation:
+    //
+    // voltage_drive =
+    //     kV_drive * velocity_wheel
+    //     + kA_drive * acceleration_wheel
+    //
+    // Rearrange to solve for acceleration:
+    //
+    // kA_drive * acceleration_wheel =
+    //     voltage_drive - kV_drive * velocity_wheel
+    //
+    // acceleration_wheel =
+    //     -(kV_drive / kA_drive) * velocity_wheel
+    //     + (1 / kA_drive) * voltage_drive
+    //
+    // Substitute the modal voltage:
+    //
+    // acceleration_wheel =
+    //     -(kV_drive / kA_drive) * velocity_wheel
+    //     + (1 / (2 * kA_drive)) *
+    //       (voltage_top - voltage_bottom)
+    //
+    // Define:
+    //
+    // a = kV_drive / kA_drive
+    // b = 1 / (2 * kA_drive)
+    //
+    // Therefore:
+    //
+    // acceleration_wheel =
+    //     -a * velocity_wheel
+    //     + b * (voltage_top - voltage_bottom)
+    //
+    // ----------------------------------------------------------
+    // Steering Dynamics
+    // ----------------------------------------------------------
+    //
+    // Feedforward equation:
+    //
+    // voltage_steer =
+    //     kV_steer * velocity_steer
+    //     + kA_steer * acceleration_steer
+    //
+    // Rearrange:
+    //
+    // acceleration_steer =
+    //     -(kV_steer / kA_steer) * velocity_steer
+    //     + (1 / kA_steer) * voltage_steer
+    //
+    // Substitute the modal voltage:
+    //
+    // acceleration_steer =
+    //     -(kV_steer / kA_steer) * velocity_steer
+    //     + (1 / (2 * kA_steer)) *
+    //       (voltage_top + voltage_bottom)
+    //
+    // Define:
+    //
+    // d = kV_steer / kA_steer
+    // c = 1 / (2 * kA_steer)
+    //
+    // Therefore:
+    //
+    // acceleration_steer =
+    //     -d * velocity_steer
+    //     + c * (voltage_top + voltage_bottom)
+    //
+    // ----------------------------------------------------------
+    // Module Angle Dynamics
+    // ----------------------------------------------------------
+    //
+    // By definition:
+    //
+    // d(theta_module)/dt = velocity_steer
+    //
+    // ==========================================================
+    // State-Space Matrices
+    // ==========================================================
+    //
+    // The continuous-time system is:
+    //
+    // dx/dt = Ax + Bu
+    // y     = Cx + Du
+    //
+    // ----------------------------------------------------------
+    // A: System Matrix (States x States)
+    // ----------------------------------------------------------
+    //
+    //     | 0   0   1 |
+    // A = | 0  -a   0 |
+    //     | 0   0  -d |
+    //
+    // ----------------------------------------------------------
+    // B: Input Matrix (States x Inputs)
+    // ----------------------------------------------------------
+    //
+    //     |  0   0 |
+    // B = |  b  -b |
+    //     |  c   c |
+    //
+    // ----------------------------------------------------------
+    // C: Output Matrix (Outputs x States)
+    // ----------------------------------------------------------
+    //
+    //     | 1     0     0 |
+    // C = | 0   Gd/r    Gs |
+    //     | 0  -Gd/r    Gs |
+    //
+    // ----------------------------------------------------------
+    // D: Feedthrough Matrix (Outputs x Inputs)
+    // ----------------------------------------------------------
     //
     //     | 0  0 |
-    // B = | b -b |
-    //     | c  c |
+    // D = | 0  0 |
+    //     | 0  0 |
     //
-    //     | 0 0 |
-    // D = | 0 0 |
-    //     | 0 0 |
+    // ==========================================================
+    // Gains / Constants
+    // ==========================================================
     //
+    // a  - Wheel velocity decay rate (1/s)
+    // b  - Wheel linear acceleration gain ((m/s^2)/V)
+    // c  - Steering angular acceleration gain ((rad/s^2)/V)
+    // d  - Steering velocity decay rate (1/s)
     //
-    // Relating this to kA and kV
+    // Gd - Pure-drive motor-to-wheel reduction (dimensionless)
+    // Gs - Pure-steering motor-to-module reduction (dimensionless)
+    // r  - Effective wheel radius (m)
     //
-    // voltage_drive = (voltage_top - voltage_bottom) / 2
-    // voltage_steer = (voltage_top + voltage_bottom) / 2
+    // kd - Differential drive coefficient = 1 / (2 * Gd)
+    // ks - Differential steer coefficient = 1 / (2 * Gs)
     //
-    // Generic Feedforward
-    // voltage = kV * speed + kA * acceleration
+    // Feedforward relationships:
     //
-    // a = kv_drive/ka_drive
-    // b = 1 / (2ka_drive)
-    // d = kv_steer/ka_steer
-    // c = 1/(2ka_steer)
+    // a = kV_drive / kA_drive
+    // b = 1 / (2 * kA_drive)
     //
+    // d = kV_steer / kA_steer
+    // c = 1 / (2 * kA_steer)
     //
-    // Deriving kd and ks:
-    // Gd - Motor to wheel reduction during pure driving
-    // Gs - Motor to module reduction during pure steering
-    // 
-    // We have already defined these equations:
-    //  speed_wheel = k_d (speed_top - speed_bottom)
-    //  speed_steer = k_s (speed_top + speed_bottom)
+    // Drive characterization units:
     //
-    // Lets find kd:
-    //  When both motors turn at equal and opposite speeds, with 
-    //  magnitude speed_motor 
-    //        speed_top = speed_motor
-    //    speed_bottom  = -speed_motor 
-    // 
-    //  Then:
-    //  speed_wheel = 2 k_d * speed_motor
-    //  
-    //  Rearrange and solve for k_d
-    //  k_d = (speed_wheel / (2 * speed_motor)) 
-    //  k_d = (speed_wheel / speed_motor) * 1/2  
-    //  k_d = 1/(speed_motor / speed_wheel) * 1/2 
-    //  k_d = 1/(2 * speed_motor / speed_wheel) 
+    // kV_drive: V / (m/s)
+    // kA_drive: V / (m/s^2)
     //
-    //  Lets define Gd as the motor to wheel reduction when doing pure driving
-    //  Gd =  speed_motor / speed_wheel 
+    // Steering characterization units:
     //
-    //  Now we can define k_d in terms of Gd
-    //  k_d = 1/(2Gd)
+    // kV_steer: V / (rad/s)
+    // kA_steer: V / (rad/s^2)
     //
-    // Lets find ks:
-    //   When both motors turn at equal speeds, with  magnitude 
-    //   speed_motor 
-    //        speed_top = speed_motor
-    //    speed_bottom  = speed_motor 
+    // ==========================================================
+    // Modeling Assumptions
+    // ==========================================================
     //
-    //  Then:
-    //  speed_steer = 2 k_s * speed_motor
-    //
-    //  Rearrange and solve for k_s
-    //  k_s = (speed_steer / (2 * speed_motor)) 
-    //  k_s = (speed_steer / speed_motor) * 1/2  
-    //  k_s = 1/(speed_motor / speed_steer) * 1/2 
-    //  k_s = 1/(2 * speed_motor / speed_steer) 
-    //
-    //  Lets define Gs as the motor to module reduction when doing pure steering
-    //  Gs =  speed_motor / speed_steer
-    //
-    //  Now we can define k_d in terms of Gd
-    //  k_s = 1/(2Gs)
-    //
+    // 1. Both motor-to-module paths are symmetric.
+    // 2. Drive and steering dynamics are approximately decoupled.
+    // 3. Encoder polarity matches the differential equations.
+    // 4. The effective wheel radius is constant.
+    // 5. Wheel slip is not modeled.
+    // 6. Static friction and other nonlinear effects are ignored.
+    // 7. Module angle is continuous (unwrapped) in the model.
+    // 8. Inputs are actual applied motor voltages.
+    // 9. Gd and Gs are effective pure-mode reductions and
+    //    must be verified against the actual mechanism.
+
 
     // a - Wheel Velocity Decay rate (1/s)
     private final double kWheelVelocityDecay = 0;
