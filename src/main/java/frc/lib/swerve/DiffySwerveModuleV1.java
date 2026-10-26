@@ -11,9 +11,12 @@ import java.util.function.DoubleSupplier;
 import edu.wpi.first.math.MatBuilder;
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.Nat;
+import edu.wpi.first.math.VecBuilder;
+import edu.wpi.first.math.estimator.KalmanFilter;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.kinematics.SwerveModulePosition;
 import edu.wpi.first.math.kinematics.SwerveModuleState;
+import edu.wpi.first.math.numbers.N1;
 import edu.wpi.first.math.numbers.N2;
 import edu.wpi.first.math.numbers.N3;
 import edu.wpi.first.math.system.LinearSystem;
@@ -533,7 +536,38 @@ public class DiffySwerveModuleV1 implements SwerveModule {
     );
 
 
-    // The state-space loop combines a controller, observer, feedforward and plant for easy control.    private final Linear
+    // The observer fuses our encoder data and voltage inputs to reject noise.
+    private final KalmanFilter<N3, N2, N3> m_observer =
+        new KalmanFilter<>(
+            Nat.N3(),
+            Nat.N3(),
+            m_plant,
+
+            // How accurate we think our model is
+            //
+            // State model standard deviations
+            // [module angle (rad),
+            //  wheel velocity (m/s),
+            //  steering velocity (rad/s)]
+            VecBuilder.fill(
+                0.1, // Module angle model uncertainty (rad)
+                0.5, // Wheel velocity model uncertainty (m/s)
+                0.5  // Steering velocity model uncertainty (rad/s)
+            ), 
+
+            // How accurate we think our encoder
+            // data is
+            //
+            // Measurement standard deviations
+            // [absolute module angle (rad),
+            //  top motor velocity (rad/s),
+            //  bottom motor velocity (rad/s)]
+            VecBuilder.fill(
+                0.01, // Absolute encoder angle
+                1.0,  // Top motor velocity
+                1.0   // Bottom motor velocity
+            ),
+            0.020);
 
 
     //
