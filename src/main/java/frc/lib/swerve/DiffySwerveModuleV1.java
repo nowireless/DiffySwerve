@@ -12,14 +12,15 @@ import edu.wpi.first.math.MatBuilder;
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.Nat;
 import edu.wpi.first.math.VecBuilder;
+import edu.wpi.first.math.controller.LinearQuadraticRegulator;
 import edu.wpi.first.math.estimator.KalmanFilter;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.kinematics.SwerveModulePosition;
 import edu.wpi.first.math.kinematics.SwerveModuleState;
-import edu.wpi.first.math.numbers.N1;
 import edu.wpi.first.math.numbers.N2;
 import edu.wpi.first.math.numbers.N3;
 import edu.wpi.first.math.system.LinearSystem;
+import edu.wpi.first.math.system.LinearSystemLoop;
 import edu.wpi.first.wpilibj.Encoder;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
@@ -537,37 +538,57 @@ public class DiffySwerveModuleV1 implements SwerveModule {
 
 
     // The observer fuses our encoder data and voltage inputs to reject noise.
-    private final KalmanFilter<N3, N2, N3> m_observer =
-        new KalmanFilter<>(
-            Nat.N3(),
-            Nat.N3(),
-            m_plant,
+    private final KalmanFilter<N3, N2, N3> m_observer = new KalmanFilter<>(
+        Nat.N3(),
+        Nat.N3(),
+        m_plant,
 
-            // How accurate we think our model is
-            //
-            // State model standard deviations
-            // [module angle (rad),
-            //  wheel velocity (m/s),
-            //  steering velocity (rad/s)]
-            VecBuilder.fill(
-                0.1, // Module angle model uncertainty (rad)
-                0.5, // Wheel velocity model uncertainty (m/s)
-                0.5  // Steering velocity model uncertainty (rad/s)
-            ), 
+        // How accurate we think our model is
+        //
+        // State model standard deviations
+        // [module angle (rad),
+        //  wheel velocity (m/s),
+        //  steering velocity (rad/s)]
+        VecBuilder.fill(
+            0.1, // Module angle model uncertainty (rad)
+            0.5, // Wheel velocity model uncertainty (m/s)
+            0.5  // Steering velocity model uncertainty (rad/s)
+        ), 
 
-            // How accurate we think our encoder
-            // data is
-            //
-            // Measurement standard deviations
-            // [absolute module angle (rad),
-            //  top motor velocity (rad/s),
-            //  bottom motor velocity (rad/s)]
-            VecBuilder.fill(
-                0.01, // Absolute encoder angle
-                1.0,  // Top motor velocity
-                1.0   // Bottom motor velocity
-            ),
-            0.020);
+        // How accurate we think our encoder
+        // data is
+        //
+        // Measurement standard deviations
+        // [absolute module angle (rad),
+        //  top motor velocity (rad/s),
+        //  bottom motor velocity (rad/s)]
+        VecBuilder.fill(
+            0.01, // Absolute encoder angle
+            1.0,  // Top motor velocity
+            1.0   // Bottom motor velocity
+        ),
+        0.020
+    );
+
+
+    // A LQR uses feedback to create voltage commands.
+    private final LinearQuadraticRegulator<N3, N2, N3> m_controller = new LinearQuadraticRegulator<N3, N2, N3>(
+        m_plant,
+        VecBuilder.fill(
+            0.10, // Module angle (rad) ~5.7 degrees
+            0.25, // Wheel velocity (m/s)
+            1.00  // Steering velocity (rad/s)
+        ),
+        VecBuilder.fill(
+             12.0, // Top motor voltage (V)
+            12.0  // Bottom motor voltage (V)
+        ),
+        0.020
+    );
+
+    // The state-space loop combines a controller, observer, feedforward and plant for easy control.
+    private final LinearSystemLoop<N3, N2, N3> m_loop =
+        new LinearSystemLoop<>(m_plant, m_controller, m_observer, 10.0, 0.020);
 
 
     //
