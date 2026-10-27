@@ -595,6 +595,7 @@ public class DiffySwerveModuleV1 implements SwerveModule {
     // Module State
     //
     private Mode m_mode = Mode.kVoltage; 
+    private Mode m_lastMode = Mode.kVoltage; 
     private double m_voltageTopMotor = 0.0;
     private double m_voltageBottomMotor = 0.0;
     private SwerveModuleState m_unfilteredModuleState = new SwerveModuleState();
@@ -603,7 +604,15 @@ public class DiffySwerveModuleV1 implements SwerveModule {
     private double m_unfilteredSteerAngleEncoders = 0.0; // Radians/Sec, we want this unwrapped 
 
 
+    // This is the current desired module state
     private SwerveModuleState m_desiredModuleState = new SwerveModuleState();
+
+    // This is the request state of the module.
+    //
+    // When this is non-null, then a new requested module state has been provided. 
+    // it will be optimize and pushed into m_desiredModuleState;
+    private SwerveModuleState m_requestedModuleState = null;
+
 
     public DiffySwerveModuleV1(String name, int topMotorPWM, int bottomMotorPWM, int topEncoderA, int topEncoderB, int bottomEncoderA, int bottomEncoderB, int steerEncoderAnalog, Rotation2d steerOffset, DoubleSupplier batteryVoltage) {
         m_name = name;
@@ -655,7 +664,10 @@ public class DiffySwerveModuleV1 implements SwerveModule {
     public void setDesiredState(SwerveModuleState desiredState) {
         m_mode = Mode.kLQR;
 
-        m_desiredModuleState = desiredState;
+        m_requestedModuleState = new SwerveModuleState(
+            desiredState.speedMetersPerSecond,
+            desiredState.angle
+        );
     }
 
     // TODO should we use the fancy unit API for this?
@@ -663,8 +675,9 @@ public class DiffySwerveModuleV1 implements SwerveModule {
         m_mode = Mode.kVoltage;
 
         // Cap to +/- volts
-        m_voltageTopMotor = MathUtil.clamp(topMotorVolts, -15, -15);
-        m_voltageBottomMotor = MathUtil.clamp(bottomMotorVolts, -15, -15);
+        m_voltageTopMotor = MathUtil.clamp(topMotorVolts, -15, 15);
+        m_voltageBottomMotor = MathUtil.clamp(bottomMotorVolts, -15, 15);
+
     }
 
     @Override
@@ -672,8 +685,10 @@ public class DiffySwerveModuleV1 implements SwerveModule {
         //
         // Read Sensors
         //
-        Rotation2d unfilteredSteerAngle = Rotation2d.fromRotations(-m_steerEncoder.get())
-            .minus(m_steerOffset);
+        Rotation2d unfilteredSteerAngle = Rotation2d.fromRotations(
+            -m_steerEncoder.get() - m_steerOffset.getRotations()
+        );
+            
 
         Rotation2d angleTopMotor = Rotation2d.fromRotations(m_topEncoder.getDistance());
         double topEncoderRateRPM = m_topEncoder.getRate() * 60.0;
@@ -718,12 +733,48 @@ public class DiffySwerveModuleV1 implements SwerveModule {
 
         switch (m_mode) {
         case kVoltage:
-            // Nothing to do there
+            // Nothing to do there, just use the voltage values we were given
             break;
         case kLQR:
             //
+            // Optimize the swerve drive request.
+            //
+
+            if (m_requestedModuleState != null) {
+                // We got a new desired swerve module state to process
+
+                // Optimize the reference state to avoid spinning further than 90 degrees
+                SwerveUtil.optimizeUnwrapped(m_requestedModuleState, unfilteredSteerAngle);
+
+                // Scale speed by cosine of angle error. This scales down movement perpendicular to the desired
+                // direction of travel that can occur when modules change directions. This results in smoother
+                // driving.
+                m_requestedModuleState.cosineScale(unfilteredSteerAngle);
+
+                // Push the requested module state into the desired state
+                m_desiredModuleState.angle = m_requestedModuleState.angle;
+                m_desiredModuleState.speedMetersPerSecond = m_requestedModuleState.speedMetersPerSecond;
+
+                // Clear the requested module state
+                m_requestedModuleState = null;
+            }
+
+
+            //
             // LQR StateSpace Control
             //
+
+            if (m_lastMode != Mode.kLQR) {
+                // Reset the observer if we are entering LQR for the first time
+                // We are telling the observer what the current state of the world is,
+                // otherwise the control loop may over react. Like it didn't know it 
+                // was moving for example.
+                m_loop.reset(VecBuilder.fill(
+                    unfilteredSteerAngle.getRadians(),
+                    unfilteredVelocityWheel,
+                    m_unfilteredSteerVelocityEncoders
+                ));
+            }
 
             // Set the next reference to our goal velocity
             m_loop.setNextR(VecBuilder.fill(
@@ -790,6 +841,9 @@ public class DiffySwerveModuleV1 implements SwerveModule {
         SmartDashboard.putNumber(m_name + ": Unfiltered Steer Angle", unfilteredSteerAngle.getDegrees());
         SmartDashboard.putNumber(m_name + ": Unfiltered Velocity (m/s)", unfilteredVelocityWheel);
         SmartDashboard.putNumber(m_name + ": Unfiltered Distance (m)", unfilteredWheelDistance);
+
+        // Save off the last mode
+        m_lastMode = m_mode;
     }
 
     /**
