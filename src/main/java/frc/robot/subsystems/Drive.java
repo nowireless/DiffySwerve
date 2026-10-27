@@ -7,6 +7,7 @@ package frc.robot.subsystems;
 import java.util.List;
 
 import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.math.kinematics.SwerveModuleState;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine.Direction;
@@ -33,7 +34,7 @@ public class Drive extends SubsystemBase {
       0, 1, 
       2, 3, 
       0, 
-      Rotation2d.fromDegrees(0), 
+      Rotation2d.fromDegrees(67), 
       power::getVoltage
     );
 
@@ -60,6 +61,14 @@ public class Drive extends SubsystemBase {
 
   @Override
   public void periodic() {
+
+    m_frontRight.setDesiredState(new SwerveModuleState(
+      0, 
+      Rotation2d.fromDegrees(45))
+    );
+
+    // m_frontRight.setVoltage(5, 5);
+  
     // This method will be called once per scheduler run
     for (SwerveModule module : m_modules) {
       module.periodic();

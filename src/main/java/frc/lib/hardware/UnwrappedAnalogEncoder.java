@@ -25,6 +25,7 @@ import edu.wpi.first.wpilibj.Counter;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj.AnalogTriggerOutput.AnalogTriggerType;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 
 /** Class for supporting continuous analog encoders, such as the US Digital MA3. */
 public class UnwrappedAnalogEncoder implements Sendable, AutoCloseable {
@@ -61,6 +62,9 @@ public class UnwrappedAnalogEncoder implements Sendable, AutoCloseable {
 
   private void init() {
     m_analogTrigger = new AnalogTrigger(m_analogInput);
+
+    // Ryan: This kinds of helps, but I understand why this class was removed!
+    m_analogTrigger.setFiltered(true);
     m_counter = new Counter();
 
     m_simDevice = SimDevice.create("AnalogEncoder", m_analogInput.getChannel());
@@ -95,6 +99,12 @@ public class UnwrappedAnalogEncoder implements Sendable, AutoCloseable {
       return m_simPosition.get();
     }
 
+    // SmartDashboard.putBoolean("UAE: Failed", false);
+    // SmartDashboard.putNumber("UAE: last position", m_lastPosition);
+    // // SmartDashboard.putNumber("UAE: position", position);
+    // SmartDashboard.putBoolean("UAE: analogTrigger.getTriggerState", m_analogTrigger.getTriggerState());
+    // SmartDashboard.putBoolean("UAE: analogTrigger.getInWindow", m_analogTrigger.getInWindow());
+
     // As the values are not atomic, keep trying until we get 2 reads of the same
     // value. If we don't within 10 attempts, warn
     for (int i = 0; i < 10; i++) {
@@ -102,14 +112,24 @@ public class UnwrappedAnalogEncoder implements Sendable, AutoCloseable {
       double pos = m_analogInput.getVoltage();
       double counter2 = m_counter.get();
       double pos2 = m_analogInput.getVoltage();
+
+      // SmartDashboard.putNumber("UAE: i", i);
+      // SmartDashboard.putNumber("UAE: counter", counter);
+      // SmartDashboard.putNumber("UAE: pos", pos);
+      // SmartDashboard.putNumber("UAE: counter2", counter2);
+      // SmartDashboard.putNumber("UAE: pos2", pos2);
+
       if (counter == counter2 && doubleEquals(pos, pos2)) {
         pos = pos / RobotController.getVoltage5V();
         double position = counter + pos - m_positionOffset;
         m_lastPosition = position;
+        // SmartDashboard.putNumber("UAE: position", position);
         return position;
       }
     }
 
+
+    // SmartDashboard.putBoolean("UAE: Failed", true);
     DriverStation.reportWarning(
         "Failed to read Analog Encoder. Potential Speed Overrun. Returning last value", false);
     return m_lastPosition;

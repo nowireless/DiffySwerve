@@ -689,14 +689,13 @@ public class DiffySwerveModuleV1 implements SwerveModule {
         );
     }
 
-    // TODO should we use the fancy unit API for this?
+    @Override
     public void setVoltage(double topMotorVolts, double bottomMotorVolts) {
         m_mode = Mode.kVoltage;
 
         // Cap to +/- volts
         m_voltageTopMotor = MathUtil.clamp(topMotorVolts, -15, 15);
         m_voltageBottomMotor = MathUtil.clamp(bottomMotorVolts, -15, 15);
-
     }
 
     @Override
@@ -705,7 +704,7 @@ public class DiffySwerveModuleV1 implements SwerveModule {
         // Read Sensors
         //
         Rotation2d unfilteredSteerAngle = Rotation2d.fromRotations(
-            -m_steerEncoder.get() - m_steerOffset.getRotations()
+            m_steerEncoder.get() - m_steerOffset.getRotations()
         );
             
 

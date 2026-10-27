@@ -27,6 +27,15 @@ public interface SwerveModule {
     public void setDesiredState(SwerveModuleState desiredState);
 
     /**
+     * Sets the desired voltage for the top and bottom motors.
+     * 
+     * @param topMotorVolts
+     * @param bottomMotorVolts
+     */
+    public void setVoltage(double topMotorVolts, double bottomMotorVolts);
+
+
+    /**
      * This method is called periodically, and is used 
      * to update swerve module-specific state.
      */
