@@ -486,17 +486,36 @@ public class DiffySwerveModuleV1 implements SwerveModule {
         .get();
     
 
+    // Feedforward relationships:
+    //
+    // a = kV_drive / kA_drive
+    // b = 1 / (2 * kA_drive)
+    //
+    // d = kV_steer / kA_steer
+    // c = 1 / (2 * kA_steer)
+    //
+    // Unloaded (Front left module) we got the following:
+    // kV_drive: 6.241   (R^2 0.96319)
+    // kA_drive: 0.38377 (R^2 0.19283)
+    // kV_steer: 2.9124   (R^2 0.95776)
+    // kA_steer: 0.18694 (R^2 0.20053)
+    //
+    // a = 6.241/0.38377 = 16.2623446335
+    // b = 1 / (2 * 0.3837) = 1.3028636944
+    // d = 2.9124  / 0.18694 = 15.5793302664
+    // c = 1 / (2 * 0.18694) = 2.6746549695
+
     // a - Wheel Velocity Decay rate (1/s)
-    private final double kWheelVelocityDecay = 0;
+    private final double kWheelVelocityDecay = 16.2623446335; // TODO tune
 
     // d - Steering Velocity Decay rate (1/s)
-    private final double kSteerVelocityDecay = 0;
+    private final double kSteerVelocityDecay = 15.5793302664; // TODO tune
     
     // b - Wheel linear acceleration gain ((m/s^2)/V)
-    private final double kWheelAccelerationGain = 0;
+    private final double kWheelAccelerationGain =  1.3028636944; // TODO tune
     
     // c - Steering angular acceleration gain ((rad/s^2)/V)
-    private final double kSteerAccelerationGain = 0;
+    private final double kSteerAccelerationGain =  2.6746549695; // TODO tune
 
     private LinearSystem<N3, N2, N3> m_plant = new LinearSystem<>(
         // A: System Matrix
@@ -839,7 +858,7 @@ public class DiffySwerveModuleV1 implements SwerveModule {
         SmartDashboard.putNumber(m_name + ": Bottom Encoder angle (Deg)", angleBottomMotor.getDegrees());
         SmartDashboard.putNumber(m_name + ": Bottom Encoder rate (RPM)", bottomEncoderRateRPM);
         SmartDashboard.putNumber(m_name + ": Unfiltered Steer Angle", unfilteredSteerAngle.getDegrees());
-        SmartDashboard.putNumber(m_name + ": Unfiltered Velocity (m/s)", unfilteredVelocityWheel);
+        SmartDashboard.putNumber(m_name + ": Unfiltered Velocity (m per s)", unfilteredVelocityWheel);
         SmartDashboard.putNumber(m_name + ": Unfiltered Distance (m)", unfilteredWheelDistance);
 
         // Save off the last mode

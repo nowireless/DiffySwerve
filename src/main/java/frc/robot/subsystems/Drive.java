@@ -7,10 +7,9 @@ package frc.robot.subsystems;
 import java.util.List;
 
 import edu.wpi.first.math.geometry.Rotation2d;
-import edu.wpi.first.math.kinematics.SwerveModuleState;
-import edu.wpi.first.wpilibj2.command.Command;
-import edu.wpi.first.wpilibj2.command.Commands;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
+import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine.Direction;
 import frc.lib.swerve.DiffySwerveModuleV1;
 import frc.lib.swerve.SwerveModule;
 
@@ -41,6 +40,22 @@ public class Drive extends SubsystemBase {
     m_modules = List.of(
       m_frontRight
     );
+
+    //
+    // SysID
+    //
+
+    var flSysIDDrive = new DiffySwerveModuleV1.SysidDrive((DiffySwerveModuleV1) m_frontRight, this);
+    SmartDashboard.putData("SysID Drive Dynamic Forward", flSysIDDrive.sysIdDynamic(Direction.kForward));
+    SmartDashboard.putData("SysID Drive Dynamic Reverse", flSysIDDrive.sysIdDynamic(Direction.kReverse));
+    SmartDashboard.putData("SysID Drive Quasistatic Forward", flSysIDDrive.sysIdQuasistatic(Direction.kForward));
+    SmartDashboard.putData("SysID Drive Quasistatic Reverse", flSysIDDrive.sysIdQuasistatic(Direction.kReverse));
+
+    var flSysIDSteer = new DiffySwerveModuleV1.SysidSteer((DiffySwerveModuleV1) m_frontRight, this);
+    SmartDashboard.putData("SysID Steer Dynamic Forward", flSysIDSteer.sysIdDynamic(Direction.kForward));
+    SmartDashboard.putData("SysID Steer Dynamic Reverse", flSysIDSteer.sysIdDynamic(Direction.kReverse));
+    SmartDashboard.putData("SysID Steer Quasistatic Forward", flSysIDSteer.sysIdQuasistatic(Direction.kForward));
+    SmartDashboard.putData("SysID Steer Quasistatic Reverse", flSysIDSteer.sysIdQuasistatic(Direction.kReverse));
   }
 
   @Override
