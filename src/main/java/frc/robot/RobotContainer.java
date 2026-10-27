@@ -10,7 +10,9 @@ import frc.robot.subsystems.Drive;
 import frc.robot.subsystems.Hack;
 import frc.robot.subsystems.Power;
 import frc.robot.subsystems.Turret;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
+import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
 
@@ -60,6 +62,24 @@ public class RobotContainer {
     // Schedule `exampleMethodCommand` when the Xbox controller's B button is pressed,
     // cancelling on release.
     // m_driverController.b().whileTrue(m_exampleSubsystem.exampleMethodCommand());
+
+    SmartDashboard.putNumber("Drive Forward", 0);
+    SmartDashboard.putNumber("Drive Strafe", 0);
+    SmartDashboard.putNumber("Drive Rotate", 0);
+    m_drive.setDefaultCommand(Commands.runEnd(
+      () -> {
+        m_drive.driveRobotCentric(
+          SmartDashboard.getNumber("Drive Forward", 0),
+          SmartDashboard.getNumber("Drive Strafe", 0),
+          SmartDashboard.getNumber("Drive Rotate", 0),
+          0.02
+        );
+      },
+      () -> {
+        m_drive.driveRobotCentric(0, 0, 0, 0.02);
+      },
+      m_drive
+    ));
   }
 
   /**

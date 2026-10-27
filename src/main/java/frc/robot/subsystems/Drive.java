@@ -7,9 +7,11 @@ package frc.robot.subsystems;
 import java.util.List;
 
 import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.math.geometry.Translation2d;
+import edu.wpi.first.math.kinematics.ChassisSpeeds;
+import edu.wpi.first.math.kinematics.SwerveDriveKinematics;
 import edu.wpi.first.math.kinematics.SwerveModuleState;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
-import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine.Direction;
 import frc.lib.swerve.DiffySwerveModuleV1;
@@ -17,7 +19,27 @@ import frc.lib.swerve.SwerveModule;
 
 public class Drive extends SubsystemBase {
 
+   public static final double kMaxSpeed = 1.0; // 3 meters per second
+  public static final double kMaxAngularSpeed = Math.PI; // 1/2 rotation per second
+
+  // private final Translation2d m_frontLeftLocation = new Translation2d(0.13, 0.13);
+  private final Translation2d m_frontRightLocation = new Translation2d(0.13, -0.13);
+  private final Translation2d m_backLeftLocation = new Translation2d(-0.13, 0.13);
+  // private final Translation2d m_backRightLocation = new Translation2d(-0.13, -0.13);
+
+   private final SwerveDriveKinematics m_kinematics = new SwerveDriveKinematics(
+      // m_frontLeftLocation,
+      m_frontRightLocation,
+      m_backLeftLocation
+      // m_backRightLocation
+  );
+
+  //
+  // Hardware
+  //
+
   private final SwerveModule m_frontRight;
+  private final SwerveModule m_backLeft;
 
   private final List<SwerveModule> m_modules;
 
@@ -39,8 +61,20 @@ public class Drive extends SubsystemBase {
       power::getVoltage
     );
 
+    m_backLeft = new DiffySwerveModuleV1(
+      "Back Left",
+      4, 
+      5, 
+      4, 5, 
+      6, 7, 
+      1, 
+      Rotation2d.fromDegrees(180), 
+      power::getVoltage
+    );
+
     m_modules = List.of(
-      m_frontRight
+      m_frontRight,
+      m_backLeft
     );
 
     //
@@ -101,6 +135,13 @@ public class Drive extends SubsystemBase {
     // );
 
     // m_frontRight.setVoltage(5, 5);
+
+    // m_backLeft.setVoltage(0, 3);
+    // m_backLeft.setDesiredState(new SwerveModuleState(
+    //   0, 
+    //   Rotation2d.fromDegrees(45))
+    // );
+
   
     // This method will be called once per scheduler run
     for (SwerveModule module : m_modules) {
@@ -111,6 +152,27 @@ public class Drive extends SubsystemBase {
   @Override
   public void simulationPeriodic() {
     // This method will be called once per scheduler run during simulation
+  }
+
+  /**
+   * Method to drive the robot using joystick info.
+   *
+   * @param xSpeed Speed of the robot in the x direction (forward).
+   * @param ySpeed Speed of the robot in the y direction (sideways).
+   * @param rot Angular rate of the robot.
+   * @param fieldRelative Whether the provided x and y speeds are relative to the field.
+   */
+  public void driveRobotCentric(double xSpeed, double ySpeed, double rot, double periodSeconds) {
+    var swerveModuleStates = m_kinematics.toSwerveModuleStates(
+      ChassisSpeeds.discretize(new ChassisSpeeds(xSpeed, ySpeed, rot), periodSeconds)
+    );
+    
+    SwerveDriveKinematics.desaturateWheelSpeeds(swerveModuleStates, kMaxSpeed);
+
+    // m_frontLeft.setDesiredState(swerveModuleStates[0]);
+    m_frontRight.setDesiredState(swerveModuleStates[0]);
+    m_backLeft.setDesiredState(swerveModuleStates[1]);
+    // m_backRight.setDesiredState(swerveModuleStates[3]);
   }
 
   //
