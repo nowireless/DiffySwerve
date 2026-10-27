@@ -596,7 +596,7 @@ public class DiffySwerveModuleV1 implements SwerveModule {
         VecBuilder.fill(
             0.10, // Module angle (rad) ~5.7 degrees
             0.25, // Wheel velocity (m/s)
-            1.00  // Steering velocity (rad/s)
+             0.50  // Steering velocity (rad/s)
         ),
         VecBuilder.fill(
              12.0, // Top motor voltage (V)
@@ -663,7 +663,7 @@ public class DiffySwerveModuleV1 implements SwerveModule {
 
         // Compensate for sensor reading latency. Try this code without it first!
         // For more info see: https://docs.wpilib.org/en/stable/docs/software/advanced-controls/state-space/state-space-intro.html#lqr-and-measurement-latency-compensation
-        // m_controller.latencyCompensate(m_plant, 0.02, 0.025);
+        m_controller.latencyCompensate(m_plant, 0.02, 0.010);
     }
 
 
@@ -841,7 +841,6 @@ public class DiffySwerveModuleV1 implements SwerveModule {
         //
         m_topMotor.setVoltage(m_voltageTopMotor);
         m_bottomMotor.setVoltage(m_voltageBottomMotor);
-
         
         //
         // Publish telemetry
@@ -859,6 +858,8 @@ public class DiffySwerveModuleV1 implements SwerveModule {
         SmartDashboard.putNumber(m_name + ": Unfiltered Steer Angle", unfilteredSteerAngle.getDegrees());
         SmartDashboard.putNumber(m_name + ": Unfiltered Velocity (m per s)", unfilteredVelocityWheel);
         SmartDashboard.putNumber(m_name + ": Unfiltered Distance (m)", unfilteredWheelDistance);
+        SmartDashboard.putNumber(m_name + ": Unfiltered Steer Velocity (rad per s)", m_unfilteredSteerVelocityEncoders);
+        SmartDashboard.putNumber(m_name + ": Average Motor Voltage",  (m_voltageTopMotor + m_voltageBottomMotor) / 2.0);
 
         // Save off the last mode
         m_lastMode = m_mode;
