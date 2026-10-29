@@ -12,6 +12,7 @@ import frc.robot.subsystems.Power;
 import frc.robot.subsystems.Turret;
 
 import java.util.Optional;
+import java.util.function.BooleanSupplier;
 import java.util.function.DoubleSupplier;
 import java.util.function.Supplier;
 
@@ -135,6 +136,10 @@ public class RobotContainer {
           move.getAngle()));
     };
 
+    BooleanSupplier fieldCentricSupplier = () -> {
+      return !m_driverController.getHID().getAButton();
+    };
+
     // SmartDashboard.putNumber("Drive Forward", 0);
     // SmartDashboard.putNumber("Drive Strafe", 0);
     // SmartDashboard.putNumber("Drive Rotate", 0);
@@ -151,7 +156,7 @@ public class RobotContainer {
           yMove = translation.get().getY();
         }
 
-        m_drive.driveRobotCentric(xMove, yMove, rotate, 0.02);
+        m_drive.drive(xMove, yMove, rotate, fieldCentricSupplier.getAsBoolean(), 0.02);
 
         // m_drive.driveRobotCentric(
         //   SmartDashboard.getNumber("Drive Forward", 0),
@@ -161,10 +166,13 @@ public class RobotContainer {
         // );
       },
       () -> {
-        m_drive.driveRobotCentric(0, 0, 0, 0.02);
+        m_drive.drive(0, 0, 0, false, 0.02);
       },
       m_drive
     ));
+
+    // m_driverController.start().onTrue(m_drive.runOnce(() -> m_drive.seedFieldCentric()));
+
   }
 
   /**

@@ -6,11 +6,18 @@ package frc.robot.subsystems;
 
 import java.util.List;
 
+import com.ctre.phoenix.motorcontrol.can.TalonSRX;
+import com.ctre.phoenix.sensors.PigeonIMU;
+
+import edu.wpi.first.math.VecBuilder;
+import edu.wpi.first.math.estimator.SwerveDrivePoseEstimator;
+import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.math.kinematics.SwerveDriveKinematics;
-import edu.wpi.first.math.kinematics.SwerveModuleState;
+import edu.wpi.first.math.kinematics.SwerveModulePosition;
+import edu.wpi.first.math.util.Units;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine.Direction;
@@ -18,6 +25,10 @@ import frc.lib.swerve.DiffySwerveModuleV1;
 import frc.lib.swerve.SwerveModule;
 
 public class Drive extends SubsystemBase {
+
+  //
+  // Constant
+  //
 
   public static final double kMaxSpeed = 3.0; // 3 meters per second
   public static final double kMaxAngularSpeed = 2.0*Math.PI; // 1/2 rotation per second
@@ -27,21 +38,32 @@ public class Drive extends SubsystemBase {
   private final Translation2d m_backLeftLocation = new Translation2d(-0.13, 0.13);
   // private final Translation2d m_backRightLocation = new Translation2d(-0.13, -0.13);
 
-   private final SwerveDriveKinematics m_kinematics = new SwerveDriveKinematics(
+
+  //
+  // Hardware
+  //
+
+  private final TalonSRX m_pigionIMUTalon = new TalonSRX(1);
+  private final PigeonIMU m_imu = new PigeonIMU(m_pigionIMUTalon);
+
+  private final SwerveModule m_frontRight;
+  private final SwerveModule m_backLeft;
+
+  private final List<SwerveModule> m_modules;
+
+  //
+  // Pose Estimation
+  //
+
+  private final SwerveDriveKinematics m_kinematics = new SwerveDriveKinematics(
       // m_frontLeftLocation,
       m_frontRightLocation,
       m_backLeftLocation
       // m_backRightLocation
   );
 
-  //
-  // Hardware
-  //
+  // private final SwerveDrivePoseEstimator m_poseEstimator;
 
-  private final SwerveModule m_frontRight;
-  private final SwerveModule m_backLeft;
-
-  private final List<SwerveModule> m_modules;
 
   /** Creates a new ExampleSubsystem. */
   public Drive(Power power) {
@@ -78,6 +100,24 @@ public class Drive extends SubsystemBase {
     );
 
     //
+    // Post Estimation
+    //
+
+    // m_poseEstimator = new SwerveDrivePoseEstimator(
+    //   m_kinematics,
+    //   getHeading(),
+    //   new SwerveModulePosition[] {
+    //     // m_frontLeft.getPosition(),
+    //     m_frontRight.getPosition(),
+    //     m_backLeft.getPosition(),
+    //     // m_backRight.getPosition()
+    //   },
+    //   Pose2d.kZero,
+    //   VecBuilder.fill(0.05, 0.05, Units.degreesToRadians(5)),
+    //   VecBuilder.fill(0.5, 0.5, Units.degreesToRadians(30))
+    // );
+
+    //
     // SysID
     //
 
@@ -92,61 +132,30 @@ public class Drive extends SubsystemBase {
     SmartDashboard.putData("SysID Steer Dynamic Reverse", flSysIDSteer.sysIdDynamic(Direction.kReverse));
     SmartDashboard.putData("SysID Steer Quasistatic Forward", flSysIDSteer.sysIdQuasistatic(Direction.kForward));
     SmartDashboard.putData("SysID Steer Quasistatic Reverse", flSysIDSteer.sysIdQuasistatic(Direction.kReverse));
-
-
-    // setDefaultCommand(Commands.repeatingSequence(
-    //   Commands.run(
-    //     () -> m_frontRight.setDesiredState(new SwerveModuleState(
-    //       0,
-    //       Rotation2d.fromDegrees(0)
-    //     )), 
-    //     this
-    //   ).withTimeout(5),
-    //   Commands.run(
-    //     () -> m_frontRight.setDesiredState(new SwerveModuleState(
-    //       0,
-    //       Rotation2d.fromDegrees(10)
-    //     )), 
-    //     this
-    //   ).withTimeout(5),
-    //   Commands.run(
-    //     () -> m_frontRight.setDesiredState(new SwerveModuleState(
-    //       0,
-    //       Rotation2d.fromDegrees(0)
-    //     )), 
-    //     this
-    //   ).withTimeout(5),
-    //   Commands.run(
-    //     () -> m_frontRight.setDesiredState(new SwerveModuleState(
-    //       0,
-    //       Rotation2d.fromDegrees(10)
-    //     )), 
-    //     this
-    //   ).withTimeout(5)
-    // ));
   }
+
+  public Rotation2d getHeading() {
+    // TODO in the future this should be getting the heading from the swerve drive pose estimator
+    return Rotation2d.fromDegrees(m_imu.getFusedHeading());
+  }
+
+
+  public void seedFieldCentricDrive() {
+    m_imu.setYaw(0);
+  }
+
 
   @Override
   public void periodic() {
-
-    // m_frontRight.setDesiredState(new SwerveModuleState(
-    //   0, 
-    //   Rotation2d.fromDegrees(45))
-    // );
-
-    // m_frontRight.setVoltage(5, 5);
-
-    // m_backLeft.setVoltage(0, 3);
-    // m_backLeft.setDesiredState(new SwerveModuleState(
-    //   0, 
-    //   Rotation2d.fromDegrees(45))
-    // );
-
+    var heading = getHeading();
   
     // This method will be called once per scheduler run
     for (SwerveModule module : m_modules) {
       module.periodic();
     }
+
+
+    SmartDashboard.putNumber("Drive Heading (Deg)", heading.getDegrees());
   }
 
   @Override
@@ -162,9 +171,16 @@ public class Drive extends SubsystemBase {
    * @param rot Angular rate of the robot.
    * @param fieldRelative Whether the provided x and y speeds are relative to the field.
    */
-  public void driveRobotCentric(double xSpeed, double ySpeed, double rot, double periodSeconds) {
+  public void drive(double xSpeed, double ySpeed, double rot, boolean fieldOriented, double periodSeconds) {
+    // TODO thing about making this a "Request" and push this into the periodic method, so we dont read heading twice
+    var chassisSpeeds = new ChassisSpeeds(xSpeed, ySpeed, rot);
+    
+    if (fieldOriented) {
+      chassisSpeeds = ChassisSpeeds.fromFieldRelativeSpeeds(chassisSpeeds, getHeading());
+    }
+
     var swerveModuleStates = m_kinematics.toSwerveModuleStates(
-      ChassisSpeeds.discretize(new ChassisSpeeds(xSpeed, ySpeed, rot), periodSeconds)
+      ChassisSpeeds.discretize(chassisSpeeds, periodSeconds)
     );
     
     SwerveDriveKinematics.desaturateWheelSpeeds(swerveModuleStates, kMaxSpeed);
@@ -178,11 +194,7 @@ public class Drive extends SubsystemBase {
   //
   // Commands
   //
+  
 
-  // public Command TestFrontModule() {
-  //   return Commands.run(
-  //       ()-> m_frontRight.setDesiredState(new SwerveModuleState()),
-  //       this
-  //     );
-  // }
+
 }
