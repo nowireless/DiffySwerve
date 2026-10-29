@@ -10,6 +10,13 @@ import frc.robot.subsystems.Drive;
 import frc.robot.subsystems.Hack;
 import frc.robot.subsystems.Power;
 import frc.robot.subsystems.Turret;
+
+import java.util.Optional;
+import java.util.function.DoubleSupplier;
+import java.util.function.Supplier;
+
+import edu.wpi.first.math.filter.SlewRateLimiter;
+import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
@@ -63,17 +70,95 @@ public class RobotContainer {
     // cancelling on release.
     // m_driverController.b().whileTrue(m_exampleSubsystem.exampleMethodCommand());
 
-    SmartDashboard.putNumber("Drive Forward", 0);
-    SmartDashboard.putNumber("Drive Strafe", 0);
-    SmartDashboard.putNumber("Drive Rotate", 0);
+    final var xFilter = new SlewRateLimiter(5);
+    final var yFilter = new SlewRateLimiter(5);
+    final var rotateFilter = new SlewRateLimiter(5);
+
+    DoubleSupplier slowModeSupplier = () -> {
+
+      // if (elevator1.getPosition() > 50) {
+      //   return 0.25;
+      // }
+
+      // if (elevator1.getPosition() > 10) {
+      //   return 0.5;
+      // }
+
+      // No slow mode
+      return 1.0;
+    };
+
+    DoubleSupplier rotationSupplier = () -> {
+      double leftTrigger = m_driverController.getHID().getLeftTriggerAxis();
+      double rightTrigger = m_driverController.getHID().getRightTriggerAxis();
+
+      SmartDashboard.putNumber("Left Trigger", leftTrigger);
+      SmartDashboard.putNumber("Right Trigger", rightTrigger);
+
+      double rotate = 0.0;
+      if (leftTrigger < rightTrigger) {
+        rotate = -rightTrigger;
+      } else {
+        rotate = leftTrigger;
+      }
+
+      rotate = Math.copySign(rotate * rotate, rotate);
+      rotate = rotateFilter.calculate(rotate) * Drive.kMaxAngularSpeed;
+      SmartDashboard.putNumber("Rotate", rotate);
+      return rotate;
+    };
+
+    Supplier<Optional<Translation2d>> translationSupplier = () -> {
+      // Read gamepad joystick state, and apply slew rate limiters
+
+      // X Move Velocity - Forward
+      double xMove = xFilter.calculate(-m_driverController.getHID().getLeftY());
+
+      // Y Move Velocity - Strafe
+      double yMove = yFilter.calculate(-m_driverController.getHID().getLeftX());
+
+      // if (controller.getHID().getLeftBumperButton()) {
+      // yMove = 0;
+      // }
+
+      if (xMove == 0 && yMove == 0) {
+        return Optional.empty();
+      }
+
+      Translation2d move = new Translation2d(xMove, yMove);
+
+      return Optional.of(new Translation2d(
+          // Scale the speed of the robot by using a quadratic input curve.
+          // and convert the joystick values -1.0-1.0 to Meters Per Second
+          Math.pow(move.getNorm(), 2) * Drive.kMaxSpeed,
+          // Get the direction the joystick is pointing
+          move.getAngle()));
+    };
+
+    // SmartDashboard.putNumber("Drive Forward", 0);
+    // SmartDashboard.putNumber("Drive Strafe", 0);
+    // SmartDashboard.putNumber("Drive Rotate", 0);
     m_drive.setDefaultCommand(Commands.runEnd(
       () -> {
-        m_drive.driveRobotCentric(
-          SmartDashboard.getNumber("Drive Forward", 0),
-          SmartDashboard.getNumber("Drive Strafe", 0),
-          SmartDashboard.getNumber("Drive Rotate", 0),
-          0.02
-        );
+        var translation = translationSupplier.get();
+
+        double rotate = rotationSupplier.getAsDouble();
+        double xMove = 0;
+        double yMove = 0;
+
+        if (translation.isPresent()) {
+          xMove = translation.get().getX();
+          yMove = translation.get().getY();
+        }
+
+        m_drive.driveRobotCentric(xMove, yMove, rotate, 0.02);
+
+        // m_drive.driveRobotCentric(
+        //   SmartDashboard.getNumber("Drive Forward", 0),
+        //   SmartDashboard.getNumber("Drive Strafe", 0),
+        //   SmartDashboard.getNumber("Drive Rotate", 0),
+        //   0.02
+        // );
       },
       () -> {
         m_drive.driveRobotCentric(0, 0, 0, 0.02);
