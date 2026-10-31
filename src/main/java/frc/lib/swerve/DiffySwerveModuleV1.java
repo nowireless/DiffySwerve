@@ -640,7 +640,9 @@ public class DiffySwerveModuleV1 implements SwerveModule {
         // Motor Setup
         //
         m_topMotor = new SparkMini(topMotorPWM, batteryVoltage);
+        m_topMotor.setInverted(false);
         m_bottomMotor = new SparkMini(bottomMotorPWM, batteryVoltage);
+        m_bottomMotor.setInverted(false);
 
         //
         // Sensor Setup
