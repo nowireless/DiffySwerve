@@ -16,6 +16,7 @@ import java.util.function.BooleanSupplier;
 import java.util.function.DoubleSupplier;
 import java.util.function.Supplier;
 
+import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.filter.SlewRateLimiter;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
@@ -103,6 +104,7 @@ public class RobotContainer {
         rotate = leftTrigger;
       }
 
+      rotate = MathUtil.applyDeadband(rotate, 0.05);
       rotate = Math.copySign(rotate * rotate, rotate);
       rotate = rotateFilter.calculate(rotate) * Drive.kMaxAngularSpeed;
       SmartDashboard.putNumber("Rotate", rotate);
@@ -113,11 +115,16 @@ public class RobotContainer {
       // Read gamepad joystick state, and apply slew rate limiters
 
       // X Move Velocity - Forward
-      double xMove = xFilter.calculate(-m_driverController.getHID().getLeftY());
+      double xMove = xFilter.calculate(
+        MathUtil.applyDeadband(-m_driverController.getHID().getLeftY(), 0.1)
+      );
 
       // Y Move Velocity - Strafe
-      double yMove = yFilter.calculate(-m_driverController.getHID().getLeftX());
+      double yMove = yFilter.calculate(
+        MathUtil.applyDeadband(-m_driverController.getHID().getLeftX(), 0.1)
+      );
 
+      // Disable strafing
       // if (controller.getHID().getLeftBumperButton()) {
       // yMove = 0;
       // }
@@ -129,11 +136,12 @@ public class RobotContainer {
       Translation2d move = new Translation2d(xMove, yMove);
 
       return Optional.of(new Translation2d(
-          // Scale the speed of the robot by using a quadratic input curve.
-          // and convert the joystick values -1.0-1.0 to Meters Per Second
-          Math.pow(move.getNorm(), 2) * Drive.kMaxSpeed,
-          // Get the direction the joystick is pointing
-          move.getAngle()));
+        // Scale the speed of the robot by using a quadratic input curve.
+        // and convert the joystick values -1.0-1.0 to Meters Per Second
+        Math.pow(move.getNorm(), 2) * Drive.kMaxSpeed,
+        // Get the direction the joystick is pointing
+        move.getAngle())
+      );
     };
 
     BooleanSupplier fieldCentricSupplier = () -> {
@@ -171,8 +179,7 @@ public class RobotContainer {
       m_drive
     ));
 
-    // m_driverController.start().onTrue(m_drive.runOnce(() -> m_drive.seedFieldCentric()));
-
+    m_driverController.start().onTrue(m_drive.runOnce(() -> m_drive.seedFieldCentricDrive()));
   }
 
   /**

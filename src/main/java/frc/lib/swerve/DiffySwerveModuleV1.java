@@ -671,8 +671,10 @@ public class DiffySwerveModuleV1 implements SwerveModule {
 
     @Override
     public SwerveModuleState getState() {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'getState'");
+        return new SwerveModuleState(
+            m_unfilteredModuleState.speedMetersPerSecond,
+            m_unfilteredModuleState.angle
+        );
     }
 
     @Override

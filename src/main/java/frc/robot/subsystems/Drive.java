@@ -18,6 +18,8 @@ import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.math.kinematics.SwerveDriveKinematics;
 import edu.wpi.first.math.kinematics.SwerveModulePosition;
 import edu.wpi.first.math.util.Units;
+import edu.wpi.first.util.sendable.Sendable;
+import edu.wpi.first.util.sendable.SendableBuilder;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine.Direction;
@@ -73,13 +75,13 @@ public class Drive extends SubsystemBase {
     //
 
     m_frontRight = new DiffySwerveModuleV1(
-      "Front Left",
+      "Front Right",
       1, 
       0, 
       0, 1, 
       2, 3, 
       0, 
-      Rotation2d.fromDegrees(67), 
+      Rotation2d.fromDegrees(67+180), 
       power::getVoltage
     );
 
@@ -90,7 +92,7 @@ public class Drive extends SubsystemBase {
       4, 5, 
       6, 7, 
       1, 
-      Rotation2d.fromDegrees(180), 
+      Rotation2d.fromDegrees(180+180), 
       power::getVoltage
     );
 
@@ -132,6 +134,32 @@ public class Drive extends SubsystemBase {
     SmartDashboard.putData("SysID Steer Dynamic Reverse", flSysIDSteer.sysIdDynamic(Direction.kReverse));
     SmartDashboard.putData("SysID Steer Quasistatic Forward", flSysIDSteer.sysIdQuasistatic(Direction.kForward));
     SmartDashboard.putData("SysID Steer Quasistatic Reverse", flSysIDSteer.sysIdQuasistatic(Direction.kReverse));
+
+    //
+    // Dashboard
+    //
+
+    // Show a little swerve drive robot on elastic
+    SmartDashboard.putData("Swerve Drive", new Sendable() {
+      @Override
+      public void initSendable(SendableBuilder builder) {
+        builder.setSmartDashboardType("SwerveDrive");
+
+        builder.addDoubleProperty("Front Left Angle", () -> 0, null);
+        builder.addDoubleProperty("Front Left Velocity", () -> 0, null);
+
+        builder.addDoubleProperty("Front Right Angle", () -> m_frontRight.getState().angle.getRadians(), null);
+        builder.addDoubleProperty("Front Right Velocity", () -> m_frontRight.getState().speedMetersPerSecond, null);
+
+        builder.addDoubleProperty("Back Left Angle", () -> m_backLeft.getState().angle.getRadians(), null);
+        builder.addDoubleProperty("Back Left Velocity", () -> m_backLeft.getState().speedMetersPerSecond, null);
+
+        builder.addDoubleProperty("Back Right Angle", () -> 0, null);
+        builder.addDoubleProperty("Back Right Velocity", () -> 0, null);
+
+        builder.addDoubleProperty("Robot Angle", () -> getHeading().getRadians(), null);
+      }
+    });
   }
 
   public Rotation2d getHeading() {
@@ -141,7 +169,8 @@ public class Drive extends SubsystemBase {
 
 
   public void seedFieldCentricDrive() {
-    m_imu.setYaw(0);
+    // TODO this is a hack right now
+    m_imu.setFusedHeading(0);
   }
 
 
