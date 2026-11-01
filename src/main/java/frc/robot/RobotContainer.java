@@ -76,15 +76,6 @@ public class RobotContainer {
     final var rotateFilter = new SlewRateLimiter(5);
 
     DoubleSupplier slowModeSupplier = () -> {
-
-      // if (elevator1.getPosition() > 50) {
-      //   return 0.25;
-      // }
-
-      // if (elevator1.getPosition() > 10) {
-      //   return 0.5;
-      // }
-
       if (m_driverController.getHID().getBButton()) {
         return 0.5;
       }
