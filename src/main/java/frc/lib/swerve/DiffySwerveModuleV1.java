@@ -14,6 +14,7 @@ import edu.wpi.first.math.Nat;
 import edu.wpi.first.math.VecBuilder;
 import edu.wpi.first.math.controller.LinearQuadraticRegulator;
 import edu.wpi.first.math.estimator.KalmanFilter;
+import edu.wpi.first.math.filter.LinearFilter;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.kinematics.SwerveModulePosition;
 import edu.wpi.first.math.kinematics.SwerveModuleState;
@@ -21,8 +22,10 @@ import edu.wpi.first.math.numbers.N2;
 import edu.wpi.first.math.numbers.N3;
 import edu.wpi.first.math.system.LinearSystem;
 import edu.wpi.first.math.system.LinearSystemLoop;
+import edu.wpi.first.wpilibj.AnalogEncoder;
 import edu.wpi.first.wpilibj.AnalogInput;
 import edu.wpi.first.wpilibj.Encoder;
+import edu.wpi.first.wpilibj.RobotState;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Subsystem;
@@ -34,7 +37,6 @@ import edu.wpi.first.units.measure.MutDistance;
 import edu.wpi.first.units.measure.MutLinearVelocity;
 import edu.wpi.first.units.measure.MutVoltage;
 import frc.lib.hardware.SparkMini;
-import frc.lib.hardware.UnwrappedAnalogEncoder;
 
 
 public class DiffySwerveModuleV1 implements SwerveModule {
@@ -66,7 +68,7 @@ public class DiffySwerveModuleV1 implements SwerveModule {
     private final Encoder m_topEncoder;
 
     private final AnalogInput m_steerEncoderInput;
-    private final UnwrappedAnalogEncoder m_steerEncoder;
+    private final AnalogEncoder m_steerEncoder;
 
     //
     // State Space
@@ -558,7 +560,6 @@ public class DiffySwerveModuleV1 implements SwerveModule {
         )
     );
 
-
     // The observer fuses our encoder data and voltage inputs to reject noise.
     private final KalmanFilter<N3, N2, N3> m_observer = new KalmanFilter<>(
         Nat.N3(),
@@ -618,12 +619,16 @@ public class DiffySwerveModuleV1 implements SwerveModule {
     //
     private Mode m_mode = Mode.kVoltage; 
     private Mode m_lastMode = Mode.kVoltage; 
+
+    private Rotation2d m_encoderSteerOffset = Rotation2d.kZero; 
+    private LinearFilter m_steerEncoderFilter = LinearFilter.singlePoleIIR(0.2, 0.02);
+    private double m_unfilteredSteerVelocityEncoders = 0.0; // Radians, we want this unwrapped 
+    private Rotation2d m_unfilteredSteerAngleEncoders = Rotation2d.kZero; // Radians/Sec, we want this unwrapped 
+
     private double m_voltageTopMotor = 0.0;
     private double m_voltageBottomMotor = 0.0;
-    private SwerveModuleState m_unfilteredModuleState = new SwerveModuleState();
-    private SwerveModulePosition m_unfilteredModulePosition = new SwerveModulePosition();
-    private double m_unfilteredSteerVelocityEncoders = 0.0; // Radians, we want this unwrapped 
-    private double m_unfilteredSteerAngleEncoders = 0.0; // Radians/Sec, we want this unwrapped 
+    private SwerveModuleState m_moduleState = new SwerveModuleState();
+    private SwerveModulePosition m_modulePosition = new SwerveModulePosition();
 
 
     // This is the current desired module state
@@ -661,7 +666,7 @@ public class DiffySwerveModuleV1 implements SwerveModule {
         
         m_steerEncoderInput = new AnalogInput(steerEncoderAnalogChannel);
         m_steerEncoderInput.setAverageBits(2);
-        m_steerEncoder = new UnwrappedAnalogEncoder(m_steerEncoderInput);
+        m_steerEncoder = new AnalogEncoder(m_steerEncoderInput);
 
 
         m_steerOffset = steerOffset;
@@ -679,8 +684,8 @@ public class DiffySwerveModuleV1 implements SwerveModule {
     @Override
     public SwerveModuleState getState() {
         return new SwerveModuleState(
-            m_unfilteredModuleState.speedMetersPerSecond,
-            m_unfilteredModuleState.angle
+            m_moduleState.speedMetersPerSecond,
+            m_moduleState.angle
         );
     }
 
@@ -712,13 +717,33 @@ public class DiffySwerveModuleV1 implements SwerveModule {
     @Override
     public void periodic() {
         //
-        // Read Sensors
+        // Get Absolute position of the module
         //
-        Rotation2d unfilteredSteerAngle = Rotation2d.fromRotations(
-            m_steerEncoder.get() - m_steerOffset.getRotations()
+        Rotation2d unfilteredSteerAngleABS = Rotation2d.fromRotations(
+            m_steerEncoderFilter.calculate(
+                m_steerEncoder.get() - m_steerOffset.getRotations()
+            )
         );
-            
 
+
+        //
+        // Sync absolute position to motor encoders
+        //
+        
+        if (RobotState.isDisabled()) {
+            // Set the motor encoders to zero
+            m_topEncoder.reset();
+            m_bottomEncoder.reset();
+
+            // The offset is just the current angle reported by the abs encoder 
+            m_encoderSteerOffset = unfilteredSteerAngleABS;
+        }
+
+        //
+        // Read top and bottom motor encoders
+        //
+        // From this we can derive the modules angular and linear speeds/positions
+        //
         Rotation2d angleTopMotor = Rotation2d.fromRotations(m_topEncoder.getDistance());
         double topEncoderRateRPM = m_topEncoder.getRate() * 60.0;
         double velocityTopMotor = Units.rotationsPerMinuteToRadiansPerSecond(topEncoderRateRPM);
@@ -727,34 +752,42 @@ public class DiffySwerveModuleV1 implements SwerveModule {
         double bottomEncoderRateRPM = m_bottomEncoder.getRate() * 60.0;
         double velocityBottomMotor = Units.rotationsPerMinuteToRadiansPerSecond(bottomEncoderRateRPM);
 
-        //
-        // Update unfiltered Module State
-        //
-
         // TODO should this come from the kalman filter or just use raw sensor readings?
         // This will be fed into the swerve drive post estimator at some point, not sure
         // if that matters or not.
+        
+        // Linear Velocity of the wheel
         double unfilteredVelocityWheel =
             (kWheelRadius / (2.0 * kGearingMotorToWheel)) *
             (velocityTopMotor - velocityBottomMotor);
-        
-        m_unfilteredModuleState.speedMetersPerSecond = unfilteredVelocityWheel;
-        m_unfilteredModuleState.angle = unfilteredSteerAngle;
-        
 
+        // Linear distance the wheel has traveled on the ground
         double unfilteredWheelDistance = 
             (kWheelRadius / (2.0 * kGearingMotorToWheel)) * 
             (angleTopMotor.getRadians() -  angleBottomMotor.getRadians());
 
-        m_unfilteredModulePosition.distanceMeters = unfilteredWheelDistance;
-        m_unfilteredModulePosition.angle = unfilteredSteerAngle;
-
+        // Angular velocity of the steering module 
         m_unfilteredSteerVelocityEncoders =
             (velocityTopMotor + velocityBottomMotor) / 
             (2.0 * kGearingMotorToModule);
-        m_unfilteredSteerAngleEncoders = 
+
+        // Angle of the steering module. This should provide unwrapped angles 
+        m_unfilteredSteerAngleEncoders = Rotation2d.fromRadians(
             (angleTopMotor.getRadians() + angleBottomMotor.getRadians())
-            / (2.0 * kGearingMotorToModule);
+            / (2.0 * kGearingMotorToModule)
+            + m_encoderSteerOffset.getRadians()
+        );
+
+        //
+        // Update Module State
+        //
+        Rotation2d steerAngle = m_unfilteredSteerAngleEncoders;
+
+        m_moduleState.speedMetersPerSecond = unfilteredVelocityWheel;
+        m_moduleState.angle = steerAngle;
+
+        m_modulePosition.distanceMeters = unfilteredWheelDistance;
+        m_modulePosition.angle = steerAngle;
 
         //
         // Update Controller
@@ -773,12 +806,12 @@ public class DiffySwerveModuleV1 implements SwerveModule {
                 // We got a new desired swerve module state to process
 
                 // Optimize the reference state to avoid spinning further than 90 degrees
-                SwerveUtil.optimizeUnwrapped(m_requestedModuleState, unfilteredSteerAngle);
+                SwerveUtil.optimizeUnwrapped(m_requestedModuleState, steerAngle);
 
                 // Scale speed by cosine of angle error. This scales down movement perpendicular to the desired
                 // direction of travel that can occur when modules change directions. This results in smoother
                 // driving.
-                m_requestedModuleState.cosineScale(unfilteredSteerAngle);
+                m_requestedModuleState.cosineScale(steerAngle);
 
                 // Push the requested module state into the desired state
                 m_desiredModuleState.angle = m_requestedModuleState.angle;
@@ -799,7 +832,7 @@ public class DiffySwerveModuleV1 implements SwerveModule {
                 // otherwise the control loop may over react. Like it didn't know it 
                 // was moving for example.
                 m_loop.reset(VecBuilder.fill(
-                    unfilteredSteerAngle.getRadians(),
+                    steerAngle.getRadians(),
                     unfilteredVelocityWheel,
                     m_unfilteredSteerVelocityEncoders
                 ));
@@ -824,7 +857,7 @@ public class DiffySwerveModuleV1 implements SwerveModule {
             // Correct our Kalman filter's state vector estimate with sensor data.
             m_loop.correct(VecBuilder.fill(
                 // Angle of the module in radians
-                unfilteredSteerAngle.getRadians(),
+                steerAngle.getRadians(),
 
                 // Velocity of the top motor shaft in rad/s 
                 velocityTopMotor,
@@ -866,11 +899,15 @@ public class DiffySwerveModuleV1 implements SwerveModule {
         SmartDashboard.putNumber(m_name + ": Bottom Applied Voltage", m_voltageBottomMotor);
         SmartDashboard.putNumber(m_name + ": Bottom Encoder angle (Deg)", angleBottomMotor.getDegrees());
         SmartDashboard.putNumber(m_name + ": Bottom Encoder rate (RPM)", bottomEncoderRateRPM);
-        SmartDashboard.putNumber(m_name + ": Unfiltered Steer Angle", unfilteredSteerAngle.getDegrees());
+        SmartDashboard.putNumber(m_name + ": Steer Angle", steerAngle.getDegrees());
+        SmartDashboard.putNumber(m_name + ": Unfiltered Steer Angle (abs)", unfilteredSteerAngleABS.getDegrees());
+        SmartDashboard.putNumber(m_name + ": Unfiltered Steer Angle (enc)", m_unfilteredSteerAngleEncoders.getDegrees());
+        SmartDashboard.putNumber(m_name + ": Unfiltered Steer Angle delta",  steerAngle.minus(unfilteredSteerAngleABS).getDegrees());
         SmartDashboard.putNumber(m_name + ": Unfiltered Velocity (m per s)", unfilteredVelocityWheel);
         SmartDashboard.putNumber(m_name + ": Unfiltered Distance (m)", unfilteredWheelDistance);
         SmartDashboard.putNumber(m_name + ": Unfiltered Steer Velocity (rad per s)", m_unfilteredSteerVelocityEncoders);
         SmartDashboard.putNumber(m_name + ": Average Motor Voltage",  (m_voltageTopMotor + m_voltageBottomMotor) / 2.0);
+        SmartDashboard.putNumber(m_name + ": Encoder Steer Offset (Deg)",  m_encoderSteerOffset.getDegrees());
 
         // Save off the last mode
         m_lastMode = m_mode;
@@ -905,8 +942,8 @@ public class DiffySwerveModuleV1 implements SwerveModule {
                             // controller but I don't got that with my setup. In theory voltage 
                             // compensation is turned on so we can trust it.
                             .voltage(m_appliedVolts.mut_replace(module.m_voltageTopMotor, Volts))
-                            .linearPosition(m_distance.mut_replace(module.m_unfilteredModulePosition.distanceMeters, Meters))
-                            .linearVelocity(m_velocity.mut_replace(module.m_unfilteredModuleState.speedMetersPerSecond, MetersPerSecond));   
+                            .linearPosition(m_distance.mut_replace(module.m_modulePosition.distanceMeters, Meters))
+                            .linearVelocity(m_velocity.mut_replace(module.m_moduleState.speedMetersPerSecond, MetersPerSecond));   
                     },
                     subsystem,
                     "DiffyServeModule_" + module.m_name + "_Drive"
@@ -952,7 +989,7 @@ public class DiffySwerveModuleV1 implements SwerveModule {
                             // controller but I don't got that with my setup. In theory voltage 
                             // compensation is turned on so we can trust it.
                             .voltage(m_appliedVolts.mut_replace(module.m_voltageTopMotor, Volts))
-                            .angularPosition(m_distance.mut_replace(module.m_unfilteredSteerAngleEncoders, Radians))
+                            .angularPosition(m_distance.mut_replace(module.m_unfilteredSteerAngleEncoders.getRadians(), Radians))
                             .angularVelocity(m_velocity.mut_replace(module.m_unfilteredSteerVelocityEncoders, RadiansPerSecond));   
                     },
                     subsystem,
