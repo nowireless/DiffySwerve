@@ -209,6 +209,11 @@ public class Drive extends SubsystemBase {
     // This method will be called once per scheduler run during simulation
   }
 
+  public void drive(double xSpeed, double ySpeed, double rot, boolean fieldOriented) {
+    this.drive(xSpeed, ySpeed, rot, fieldOriented, 0.02);
+  }
+
+
   /**
    * Method to drive the robot using joystick info.
    *

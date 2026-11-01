@@ -21,6 +21,7 @@ import edu.wpi.first.math.numbers.N2;
 import edu.wpi.first.math.numbers.N3;
 import edu.wpi.first.math.system.LinearSystem;
 import edu.wpi.first.math.system.LinearSystemLoop;
+import edu.wpi.first.wpilibj.AnalogInput;
 import edu.wpi.first.wpilibj.Encoder;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
@@ -64,6 +65,7 @@ public class DiffySwerveModuleV1 implements SwerveModule {
     private final Encoder m_bottomEncoder;
     private final Encoder m_topEncoder;
 
+    private final AnalogInput m_steerEncoderInput;
     private final UnwrappedAnalogEncoder m_steerEncoder;
 
     //
@@ -634,7 +636,7 @@ public class DiffySwerveModuleV1 implements SwerveModule {
     private SwerveModuleState m_requestedModuleState = null;
 
 
-    public DiffySwerveModuleV1(String name, int topMotorPWM, int bottomMotorPWM, int topEncoderA, int topEncoderB, int bottomEncoderA, int bottomEncoderB, int steerEncoderAnalog, Rotation2d steerOffset, DoubleSupplier batteryVoltage) {
+    public DiffySwerveModuleV1(String name, int topMotorPWM, int bottomMotorPWM, int topEncoderA, int topEncoderB, int bottomEncoderA, int bottomEncoderB, int steerEncoderAnalogChannel, Rotation2d steerOffset, DoubleSupplier batteryVoltage) {
         m_name = name;
 
         //
@@ -656,7 +658,11 @@ public class DiffySwerveModuleV1 implements SwerveModule {
         m_bottomEncoder.setReverseDirection(true);
         m_bottomEncoder.setDistancePerPulse(1.0/kMotorEncoderResolution);
 
-        m_steerEncoder = new UnwrappedAnalogEncoder(steerEncoderAnalog);
+        
+        m_steerEncoderInput = new AnalogInput(steerEncoderAnalogChannel);
+        m_steerEncoderInput.setAverageBits(2);
+        m_steerEncoder = new UnwrappedAnalogEncoder(m_steerEncoderInput);
+
 
         m_steerOffset = steerOffset;
     
