@@ -677,6 +677,9 @@ public class DiffySwerveModuleV1 implements SwerveModule {
 
         // Compensate for sensor reading latency. Try this code without it first!
         // For more info see: https://docs.wpilib.org/en/stable/docs/software/advanced-controls/state-space/state-space-intro.html#lqr-and-measurement-latency-compensation
+        //
+        // TODO I don't know if this is right at all, I just adjusted it till stuff started to work.
+        // This is not how this should be done. IIRC 20ms is the CAN bus delay usually seen, we are using all data from the FPGA
         m_controller.latencyCompensate(m_plant, 0.02, 0.010);
     }
 
@@ -719,12 +722,16 @@ public class DiffySwerveModuleV1 implements SwerveModule {
         //
         // Get Absolute position of the module
         //
+
+        // TODO need to get rid of the unfiltered wording. 
+        // Just drop unfiltered everywhere. As using absolute or relative prefixes should 
+        // indicate the "rawness" of the values. 
+        // Then later on the module should present the kalman filters estimations upward.
         Rotation2d unfilteredSteerAngleABS = Rotation2d.fromRotations(
             m_steerEncoderFilter.calculate(
                 m_steerEncoder.get() - m_steerOffset.getRotations()
             )
         );
-
 
         //
         // Sync absolute position to motor encoders
@@ -781,6 +788,7 @@ public class DiffySwerveModuleV1 implements SwerveModule {
         //
         // Update Module State
         //
+
         Rotation2d steerAngle = m_unfilteredSteerAngleEncoders;
 
         m_moduleState.speedMetersPerSecond = unfilteredVelocityWheel;

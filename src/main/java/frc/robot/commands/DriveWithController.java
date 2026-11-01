@@ -25,7 +25,7 @@ public class DriveWithController extends Command {
     private final DoubleSupplier slowModeSupplier;
     private final BooleanSupplier disableXMovementSupplier;
     private final BooleanSupplier disableYMovementSupplier;
-    private final Supplier<Rotation2d> robotHeadingOverrideSupplier;
+    private final Supplier<Rotation2d> externalRobotHeadingSupplier;
 
 
     // State
@@ -33,6 +33,7 @@ public class DriveWithController extends Command {
     private final ProfiledPIDController robotHeadingController = new ProfiledPIDController(10.0, 0, 0, headingControllerConstraints);
 
     private boolean lastHeadingControllerEnabled = false;
+    private Rotation2d latchedHeading = null;
 
     public DriveWithController(
         Drive drive,
@@ -56,7 +57,7 @@ public class DriveWithController extends Command {
         this.slowModeSupplier = slowModeSupplier;
         this.disableXMovementSupplier = disableXMovementSupplier;
         this.disableYMovementSupplier = disableYMovementSupplier;
-        this.robotHeadingOverrideSupplier = fieldHeadingOverrideSupplier;
+        this.externalRobotHeadingSupplier = fieldHeadingOverrideSupplier;
 
         addRequirements(drive);
 
@@ -65,10 +66,17 @@ public class DriveWithController extends Command {
 
     @Override
     public void initialize() {
+        lastHeadingControllerEnabled = false;
+        latchedHeading = null;
     }
 
     @Override
     public void execute() {
+        //
+        // Robot State
+        // 
+        var driveHeading = drive.getHeading();
+
         //
         // Robot Movement
         //
@@ -90,34 +98,58 @@ public class DriveWithController extends Command {
             yMove = 0;
         }
 
-        Rotation2d fieldHeadingOverride = robotHeadingOverrideSupplier.get();
+        // Retrieve the external robot heading override
+        // This will take precedence over the latched robot heading
+        Rotation2d externalRobotHeading = externalRobotHeadingSupplier.get();
 
         var slowModeScaler = slowModeSupplier.getAsDouble();
         xMove *= slowModeScaler;
         yMove *= slowModeScaler;
         rotate *= slowModeScaler;
 
+        if (MathUtil.isNear(0, rotate, 0.01)) {
+            // We are not commanding the robot to rotate
+            if (latchedHeading == null) {
+                // We just switched from unlatched to latched
+                // Capture the current heading
+                latchedHeading = driveHeading;
+            }
+        } else {
+            // Robot is being commanded to be rotated so clear the latch
+            latchedHeading = null;
+        }
+
+        Rotation2d robotHeadingOverride = null;
+        if (externalRobotHeading != null) {
+            robotHeadingOverride = externalRobotHeading;
+
+            // Clear the latched heading if an external heading was provided
+            latchedHeading = null;
+        } else if (latchedHeading != null) {
+            robotHeadingOverride = latchedHeading;
+        }
+
         //
         // Heading controller
         //
-        if (fieldHeadingOverride != null) {
+        if (robotHeadingOverride != null) {
             if (!lastHeadingControllerEnabled) {
                 // Reset heading controller if we are entering it for the first time
-                robotHeadingController.reset(new State(drive.getHeading().getRadians(), 0)); // TODO need to account for angular velocity
+                robotHeadingController.reset(new State(driveHeading.getRadians(), 0)); // TODO need to account for angular velocity
             }
 
             // Calculate the rotate command in Rad/Sec so we can reuse the PID values used in auto
-            robotHeadingController.setGoal(fieldHeadingOverride.getRadians());
-            rotate = robotHeadingController.calculate(drive.getHeading().getRadians());
+            robotHeadingController.setGoal(robotHeadingOverride.getRadians());
+            rotate = robotHeadingController.calculate(driveHeading.getRadians());
             rotate = MathUtil.clamp(rotate, -headingControllerConstraints.maxVelocity, headingControllerConstraints.maxVelocity);
 
-            SmartDashboard.putNumber("DriveWithController/Robot Heading goal (deg)", fieldHeadingOverride.getRadians());
+            SmartDashboard.putNumber("DriveWithController/Robot Heading goal (deg)", robotHeadingOverride.getRadians());
             SmartDashboard.putNumber("DriveWithController/Robot Heading error (deg)", Math.toDegrees(robotHeadingController.getPositionError()));
             SmartDashboard.putNumber("DriveWithController/Robot heading override output", rotate);
         } else {
-            SmartDashboard.putNumber("DriveWithController/Robot Heading goal (deg)", 0.0);
-            SmartDashboard.putNumber("DriveWithController/Robot Heading error (deg)", 0);
-            SmartDashboard.putNumber("DriveWithController/Robot heading override output", 0);
+            SmartDashboard.putNumber("DriveWithController/Robot Heading goal (deg)", Double.NaN);
+            SmartDashboard.putNumber("DriveWithController/Robot Heading error (deg)", Double.NaN);
+            SmartDashboard.putNumber("DriveWithController/Robot heading override output", Double.NaN);
         }
 
  
@@ -132,9 +164,12 @@ public class DriveWithController extends Command {
         SmartDashboard.putNumber("DriveWithController/xMove", xMove);
         SmartDashboard.putNumber("DriveWithController/yMove", yMove);
         SmartDashboard.putNumber("DriveWithController/rotate", rotate);
-        SmartDashboard.putBoolean("DriveWithController/Robot Heading Override enabled", fieldHeadingOverride != null);
+        SmartDashboard.putNumber("DriveWithController/Latched Robot heading", latchedHeading == null ? Double.NaN : latchedHeading.getDegrees());
+        SmartDashboard.putNumber("DriveWithController/External Robot heading", externalRobotHeading == null ? Double.NaN : externalRobotHeading.getDegrees());
+        SmartDashboard.putNumber("DriveWithController/Robot Heading Override", robotHeadingOverride == null ? Double.NaN : robotHeadingOverride.getDegrees());
+        SmartDashboard.putBoolean("DriveWithController/Robot Heading Override enabled", robotHeadingOverride != null);
         SmartDashboard.putBoolean("DriveWithController/Field oriented", fieldOriented);
-        lastHeadingControllerEnabled = fieldHeadingOverride != null;
+        lastHeadingControllerEnabled = robotHeadingOverride != null;
     }
 
     @Override
