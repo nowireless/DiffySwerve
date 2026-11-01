@@ -139,6 +139,8 @@ public class Drive extends SubsystemBase {
     // Dashboard
     //
 
+    // TODO reorg how diag data gets pushed to NT. Try to use the more nesting
+
     // Show a little swerve drive robot on elastic
     SmartDashboard.putData("Swerve Drive", new Sendable() {
       @Override
@@ -160,6 +162,21 @@ public class Drive extends SubsystemBase {
         builder.addDoubleProperty("Robot Angle", () -> getHeading().getRadians(), null);
       }
     });
+
+    //
+    // Test Commands
+    //
+
+    SmartDashboard.putNumber("Drive Motor Test Volts", 6);
+    SmartDashboard.putData("Drive Motor Test", this.runEnd(
+      () -> {
+        var volts = SmartDashboard.getNumber("Drive Motor Test Volts", 0);
+        for (var m : m_modules) {
+          m.setVoltage(volts, volts);
+        }
+      },
+      this::stop
+    ));
   }
 
   public Rotation2d getHeading() {
@@ -214,10 +231,15 @@ public class Drive extends SubsystemBase {
     
     SwerveDriveKinematics.desaturateWheelSpeeds(swerveModuleStates, kMaxSpeed);
 
-    // m_frontLeft.setDesiredState(swerveModuleStates[0]);
-    m_frontRight.setDesiredState(swerveModuleStates[0]);
-    m_backLeft.setDesiredState(swerveModuleStates[1]);
-    // m_backRight.setDesiredState(swerveModuleStates[3]);
+    for (int i = 0; i < m_modules.size(); i++) {
+      m_modules.get(i).setDesiredState(swerveModuleStates[i]);
+    }
+  }
+
+  public void stop() {
+    for (var m : m_modules) {
+      m.setVoltage(0, 0);
+    }
   }
 
   //
