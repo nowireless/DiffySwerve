@@ -5,9 +5,8 @@
 package frc.robot;
 
 import frc.robot.Constants.OperatorConstants;
-import frc.robot.commands.Autos;
+import frc.robot.commands.DriveWithController;
 import frc.robot.subsystems.Drive;
-import frc.robot.subsystems.Hack;
 import frc.robot.subsystems.Power;
 import frc.robot.subsystems.Turret;
 
@@ -18,10 +17,10 @@ import java.util.function.Supplier;
 
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.filter.SlewRateLimiter;
+import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
-import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
 
@@ -86,6 +85,10 @@ public class RobotContainer {
       //   return 0.5;
       // }
 
+      if (m_driverController.getHID().getBButton()) {
+        return 0.5;
+      }
+
       // No slow mode
       return 1.0;
     };
@@ -148,35 +151,21 @@ public class RobotContainer {
       return !m_driverController.getHID().getAButton();
     };
 
-    // SmartDashboard.putNumber("Drive Forward", 0);
-    // SmartDashboard.putNumber("Drive Strafe", 0);
-    // SmartDashboard.putNumber("Drive Rotate", 0);
-    m_drive.setDefaultCommand(Commands.runEnd(
-      () -> {
-        var translation = translationSupplier.get();
-
-        double rotate = rotationSupplier.getAsDouble();
-        double xMove = 0;
-        double yMove = 0;
-
-        if (translation.isPresent()) {
-          xMove = translation.get().getX();
-          yMove = translation.get().getY();
+    m_drive.setDefaultCommand(new DriveWithController(
+      m_drive, 
+      translationSupplier,
+      rotationSupplier,
+      fieldCentricSupplier,
+      slowModeSupplier,
+      () -> { return false; },
+      () -> { return false; },
+      () -> { 
+        if (m_driverController.getHID().getLeftBumperButton()) {
+          return Rotation2d.fromDegrees(0);
         }
 
-        m_drive.drive(xMove, yMove, rotate, fieldCentricSupplier.getAsBoolean(), 0.02);
-
-        // m_drive.driveRobotCentric(
-        //   SmartDashboard.getNumber("Drive Forward", 0),
-        //   SmartDashboard.getNumber("Drive Strafe", 0),
-        //   SmartDashboard.getNumber("Drive Rotate", 0),
-        //   0.02
-        // );
-      },
-      () -> {
-        m_drive.drive(0, 0, 0, false, 0.02);
-      },
-      m_drive
+        return null;
+       }
     ));
 
     m_driverController.start().onTrue(m_drive.runOnce(() -> m_drive.seedFieldCentricDrive()));

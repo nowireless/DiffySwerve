@@ -2,6 +2,7 @@ package frc.robot.commands;
 
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.controller.ProfiledPIDController;
+import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.trajectory.TrapezoidProfile;
 import edu.wpi.first.math.trajectory.TrapezoidProfile.State;
@@ -24,12 +25,12 @@ public class DriveWithController extends Command {
     private final DoubleSupplier slowModeSupplier;
     private final BooleanSupplier disableXMovementSupplier;
     private final BooleanSupplier disableYMovementSupplier;
-    private final Supplier<Double> fieldHeadingOverrideSupplier;
+    private final Supplier<Rotation2d> robotHeadingOverrideSupplier;
 
 
     // State
-    private final TrapezoidProfile.Constraints headingControllerConstraints =  new TrapezoidProfile.Constraints(Drive.kMaxSpeed/4.0, 4*Math.PI);
-    private final ProfiledPIDController fieldHeadingController = new ProfiledPIDController(6.0, 0, 0, headingControllerConstraints);
+    private final TrapezoidProfile.Constraints headingControllerConstraints =  new TrapezoidProfile.Constraints(Drive.kMaxAngularSpeed/2.0, 4*Math.PI);
+    private final ProfiledPIDController robotHeadingController = new ProfiledPIDController(10.0, 0, 0, headingControllerConstraints);
 
     private boolean lastHeadingControllerEnabled = false;
 
@@ -45,7 +46,7 @@ public class DriveWithController extends Command {
         // This is used to override the robots orientation while driving.
         // The user of this command should use it to supply either an vision heading override or a heading to have the robot face
         // while driving.
-        Supplier<Double> fieldHeadingOverrideSupplier
+        Supplier<Rotation2d> fieldHeadingOverrideSupplier
     ) {
 
         this.drive = drive;
@@ -55,11 +56,11 @@ public class DriveWithController extends Command {
         this.slowModeSupplier = slowModeSupplier;
         this.disableXMovementSupplier = disableXMovementSupplier;
         this.disableYMovementSupplier = disableYMovementSupplier;
-        this.fieldHeadingOverrideSupplier = fieldHeadingOverrideSupplier;
+        this.robotHeadingOverrideSupplier = fieldHeadingOverrideSupplier;
 
         addRequirements(drive);
 
-        fieldHeadingController.enableContinuousInput(-Math.PI, Math.PI);
+        robotHeadingController.enableContinuousInput(-Math.PI, Math.PI);
     }
 
     @Override
@@ -89,7 +90,7 @@ public class DriveWithController extends Command {
             yMove = 0;
         }
 
-        Double fieldHeadingOverride = fieldHeadingOverrideSupplier.get();
+        Rotation2d fieldHeadingOverride = robotHeadingOverrideSupplier.get();
 
         var slowModeScaler = slowModeSupplier.getAsDouble();
         xMove *= slowModeScaler;
@@ -102,18 +103,21 @@ public class DriveWithController extends Command {
         if (fieldHeadingOverride != null) {
             if (!lastHeadingControllerEnabled) {
                 // Reset heading controller if we are entering it for the first time
-                fieldHeadingController.reset(new State(drive.getHeading().getRadians(), 0)); // TODO need to account for angular velocity
+                robotHeadingController.reset(new State(drive.getHeading().getRadians(), 0)); // TODO need to account for angular velocity
             }
 
             // Calculate the rotate command in Rad/Sec so we can reuse the PID values used in auto
-            fieldHeadingController.setGoal(Math.toRadians(fieldHeadingOverride));
-            rotate = fieldHeadingController.calculate(drive.getHeading().getRadians());
+            robotHeadingController.setGoal(fieldHeadingOverride.getRadians());
+            rotate = robotHeadingController.calculate(drive.getHeading().getRadians());
             rotate = MathUtil.clamp(rotate, -headingControllerConstraints.maxVelocity, headingControllerConstraints.maxVelocity);
 
-            SmartDashboard.putNumber("DriveWithController - Heading goal", fieldHeadingOverride);
-            SmartDashboard.putNumber("DriveWithController - Heading error", Math.toDegrees(fieldHeadingController.getPositionError()));
-            SmartDashboard.putNumber("DriveWithController - Field override output", rotate);
-
+            SmartDashboard.putNumber("DriveWithController/Robot Heading goal (deg)", fieldHeadingOverride.getRadians());
+            SmartDashboard.putNumber("DriveWithController/Robot Heading error (deg)", Math.toDegrees(robotHeadingController.getPositionError()));
+            SmartDashboard.putNumber("DriveWithController/Robot heading override output", rotate);
+        } else {
+            SmartDashboard.putNumber("DriveWithController/Robot Heading goal (deg)", 0.0);
+            SmartDashboard.putNumber("DriveWithController/Robot Heading error (deg)", 0);
+            SmartDashboard.putNumber("DriveWithController/Robot heading override output", 0);
         }
 
  
@@ -125,11 +129,11 @@ public class DriveWithController extends Command {
             fieldOriented
         );
         
-        SmartDashboard.putNumber("DriveWithController - xMove", xMove);
-        SmartDashboard.putNumber("DriveWithController - yMove", yMove);
-        SmartDashboard.putNumber("DriveWithController - rotate", rotate);
-        SmartDashboard.putBoolean("DriveWithController - Field Heading Override enabled", fieldHeadingOverride != null);
-        SmartDashboard.putBoolean("DriveWithController - Field oriented", fieldOriented);
+        SmartDashboard.putNumber("DriveWithController/xMove", xMove);
+        SmartDashboard.putNumber("DriveWithController/yMove", yMove);
+        SmartDashboard.putNumber("DriveWithController/rotate", rotate);
+        SmartDashboard.putBoolean("DriveWithController/Robot Heading Override enabled", fieldHeadingOverride != null);
+        SmartDashboard.putBoolean("DriveWithController/Field oriented", fieldOriented);
         lastHeadingControllerEnabled = fieldHeadingOverride != null;
     }
 
