@@ -471,7 +471,7 @@ public class DiffySwerveModuleV1 implements SwerveModule {
 
     // Gd  Pure-drive motor-to-wheel reduction (dimensionless)
     private final double kGearingMotorToWheel = new Gearing()
-        .with(76, 21) // UltraPlanetary 4:1 really 3.61:1
+        .with(Gearing.kRevUltraPlanetary3to1) // UltraPlanetary 3:1 really 3.61:1
         .with(27, 23) // UltraPlanetary to intermediate shaft
         .with(68, 14) // Intermediate shaft to outer module gear
         .with(14, 42) // Inner module gear to bevel shaft
@@ -480,7 +480,7 @@ public class DiffySwerveModuleV1 implements SwerveModule {
 
     // Gs - Pure-steering motor-to-module reduction (dimensionless)
     private final double kGearingMotorToModule = new Gearing()
-        .with(76, 21) // UltraPlanetary 4:1 really 3.61:1
+        .with(Gearing.kRevUltraPlanetary3to1) // UltraPlanetary 3:1 really 3.61:1
         .with(27, 23) // UltraPlanetary to intermediate shaft
         .with(68, 14) // Intermediate shaft to outer module gear
         .get();
@@ -495,27 +495,28 @@ public class DiffySwerveModuleV1 implements SwerveModule {
     // c = 1 / (2 * kA_steer)
     //
     // Unloaded (Front left module) we got the following:
-    // kV_drive: 6.241   (R^2 0.96319)
-    // kA_drive: 0.38377 (R^2 0.19283)
-    // kV_steer: 2.9124   (R^2 0.95776)
-    // kA_steer: 0.18694 (R^2 0.20053)
+    // kV_drive: 4.508   (Sim Velocity R^2 0.97226)
+    // kA_drive: 0.24223 (Sim Acceleration R^2 0.34133)
+    // kV_steer: 2.0988   (Sim Velocity R^2 0.96819)
+    // kA_steer: 0.10881 (Sim Acceleration R^2 0.36117)
     //
-    // a = 6.241/0.38377 = 16.2623446335
-    // b = 1 / (2 * 0.3837) = 1.3028636944
-    // d = 2.9124  / 0.18694 = 15.5793302664
-    // c = 1 / (2 * 0.18694) = 2.6746549695
+    // a = 4.508 / 0.24223 = 18.6104115923
+    // b = 1 / (2 * 0.24223) = 2.06415390332
+    //
+    // d = 2.0988 / 0.10881 = 19.2886683209
+    // c = 1 / (2 * 0.10881) = 4.5951658855
 
     // a - Wheel Velocity Decay rate (1/s)
-    private final double kWheelVelocityDecay = 16.2623446335; // TODO tune
+    private final double kWheelVelocityDecay = 18.6104115923; // TODO tune
 
     // d - Steering Velocity Decay rate (1/s)
-    private final double kSteerVelocityDecay = 15.5793302664; // TODO tune
+    private final double kSteerVelocityDecay = 19.2886683209; // TODO tune
     
     // b - Wheel linear acceleration gain ((m/s^2)/V)
-    private final double kWheelAccelerationGain =  1.3028636944; // TODO tune
+    private final double kWheelAccelerationGain = 2.06415390332; // TODO tune
     
     // c - Steering angular acceleration gain ((rad/s^2)/V)
-    private final double kSteerAccelerationGain =  2.6746549695; // TODO tune
+    private final double kSteerAccelerationGain =  4.5951658855; // TODO tune
 
     private LinearSystem<N3, N2, N3> m_plant = new LinearSystem<>(
         // A: System Matrix

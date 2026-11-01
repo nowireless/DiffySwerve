@@ -32,7 +32,7 @@ public class Drive extends SubsystemBase {
   // Constant
   //
 
-  public static final double kMaxSpeed = 3.0; // 3 meters per second
+  public static final double kMaxSpeed = 1.5; // 3 meters per second
   public static final double kMaxAngularSpeed = 2.0*Math.PI; // 1/2 rotation per second
 
   // private final Translation2d m_frontLeftLocation = new Translation2d(0.13, 0.13);
