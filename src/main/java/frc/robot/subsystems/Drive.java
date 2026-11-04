@@ -64,7 +64,7 @@ public class Drive extends SubsystemBase {
       // m_backRightLocation
   );
 
-  // private final SwerveDrivePoseEstimator m_poseEstimator;
+  private final SwerveDrivePoseEstimator m_poseEstimator;
 
 
   /** Creates a new ExampleSubsystem. */
@@ -102,22 +102,22 @@ public class Drive extends SubsystemBase {
     );
 
     //
-    // Post Estimation
+    // Pose Estimation
     //
 
-    // m_poseEstimator = new SwerveDrivePoseEstimator(
-    //   m_kinematics,
-    //   getHeading(),
-    //   new SwerveModulePosition[] {
-    //     // m_frontLeft.getPosition(),
-    //     m_frontRight.getPosition(),
-    //     m_backLeft.getPosition(),
-    //     // m_backRight.getPosition()
-    //   },
-    //   Pose2d.kZero,
-    //   VecBuilder.fill(0.05, 0.05, Units.degreesToRadians(5)),
-    //   VecBuilder.fill(0.5, 0.5, Units.degreesToRadians(30))
-    // );
+    m_poseEstimator = new SwerveDrivePoseEstimator(
+      m_kinematics,
+      getIMUHeading(),
+      new SwerveModulePosition[] {
+        // m_frontLeft.getPosition(),
+        m_frontRight.getPosition(),
+        m_backLeft.getPosition(),
+        // m_backRight.getPosition()
+      },
+      Pose2d.kZero,
+      VecBuilder.fill(0.05, 0.05, Units.degreesToRadians(5)),
+      VecBuilder.fill(0.5, 0.5, Units.degreesToRadians(30))
+    );
 
     //
     // SysID
@@ -179,11 +179,9 @@ public class Drive extends SubsystemBase {
     ));
   }
 
-  public Rotation2d getHeading() {
-    // TODO in the future this should be getting the heading from the swerve drive pose estimator
+  private Rotation2d getIMUHeading() {
     return Rotation2d.fromDegrees(m_imu.getFusedHeading());
   }
-
 
   public void seedFieldCentricDrive() {
     // TODO this is a hack right now
@@ -193,13 +191,15 @@ public class Drive extends SubsystemBase {
 
   @Override
   public void periodic() {
-    var heading = getHeading();
+    var imuHeading = getIMUHeading();
   
     // This method will be called once per scheduler run
     for (SwerveModule module : m_modules) {
       module.periodic();
     }
 
+
+    m_poseEstimator.update(imuHeading, getModulePositions());
 
     SmartDashboard.putNumber("Drive Heading (Deg)", heading.getDegrees());
   }
